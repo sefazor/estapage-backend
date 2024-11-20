@@ -28,6 +28,8 @@ func setupRoutes(app *fiber.App) {
 	publicProps := api.Group("/p")
 	publicProps.Get("/:username", controller.ListUserProperties)               // Kullanıcının tüm ilanları
 	publicProps.Get("/:username/:property_slug", controller.GetPropertyBySlug) // İlan detayı
+	// Public routes
+	api.Post("/properties/:property_id/leads", controller.CreateLead) // Bu route korumasız olmalı
 
 	// Protected Routes (Authentication gerekir)
 	protected := api.Group("/", middleware.AuthMiddleware())
@@ -42,6 +44,28 @@ func setupRoutes(app *fiber.App) {
 
 	// Upload routes
 	properties.Post("/:id/images", controller.UploadPropertyImage)
+
+	// Dashboard routes (Protected)
+	dashboard := api.Group("/dashboard", middleware.AuthMiddleware())
+	dashboard.Get("/stats", controller.GetDashboardStats)
+
+	// Property view recording
+	api.Post("/properties/:id/view", controller.RecordPropertyView)
+
+	// Settings routes (Protected)
+	settings := api.Group("/settings", middleware.AuthMiddleware())
+	settings.Get("/profile", controller.GetProfile)
+	settings.Put("/profile", controller.UpdateProfile)
+
+	// Image upload routes (Protected)
+	properties.Post("/:property_id/images", controller.UploadPropertyImage)
+	properties.Delete("/images/:image_id", controller.DeletePropertyImage)
+
+	// Protected lead routes
+	leads := protected.Group("/leads")
+	leads.Get("/", controller.GetMyLeads)
+	leads.Put("/:id/status", controller.UpdateLeadStatus)
+	leads.Put("/:id/read", controller.MarkLeadAsRead)
 
 }
 
@@ -64,6 +88,9 @@ func main() {
 		&model.UserSubscription{},
 		&model.Property{},
 		&model.PropertyImage{},
+		&model.PropertyView{},  // Yeni eklendi
+		&model.PropertyStats{}, // Yeni eklendi
+		&model.Lead{},
 	)
 	if err != nil {
 		log.Printf("Migration warning: %v", err)

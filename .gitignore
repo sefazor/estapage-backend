@@ -1,0 +1,19 @@
+# Hassas bilgiler
+.env
+
+# Derlenmiş dosyalar
+*.exe
+*.out
+
+# IDE ve Sistem dosyaları
+.vscode/
+.DS_Store
+
+# Bağımlılık klasörleri
+/vendor/
+
+# Log dosyaları
+*.log
+
+# Temp dosyaları
+/tmp/
