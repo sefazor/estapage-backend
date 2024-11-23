@@ -6,21 +6,77 @@ import (
 	"gorm.io/gorm"
 )
 
+// Property Types
+type PropertyType string
+
+const (
+	PropertyTypeHouse      PropertyType = "House"
+	PropertyTypeApartment  PropertyType = "Apartment"
+	PropertyTypeCondo      PropertyType = "Condo"
+	PropertyTypeVilla      PropertyType = "Villa"
+	PropertyTypeTownhouse  PropertyType = "Townhouse"
+	PropertyTypeLand       PropertyType = "Land"
+	PropertyTypeCommercial PropertyType = "Commercial"
+	PropertyTypeIndustrial PropertyType = "Industrial"
+)
+
+// Property Status
+type PropertyStatus string
+
+const (
+	PropertyStatusForSale       PropertyStatus = "For Sale"
+	PropertyStatusForRent       PropertyStatus = "For Rent"
+	PropertyStatusSold          PropertyStatus = "Sold"
+	PropertyStatusRented        PropertyStatus = "Rented"
+	PropertyStatusUnderContract PropertyStatus = "Under Contract"
+)
+
+// Currency Types
+type Currency string
+
+const (
+	CurrencyUSD Currency = "USD"
+	CurrencyEUR Currency = "EUR"
+	CurrencyTRY Currency = "TRY"
+	CurrencyGBP Currency = "GBP"
+	CurrencyJPY Currency = "JPY"
+	CurrencyAUD Currency = "AUD"
+	CurrencyCAD Currency = "CAD"
+)
+
 type Property struct {
 	gorm.Model
-	Title       string  `json:"title" gorm:"not null"`
-	Slug        string  `json:"slug" gorm:"uniqueIndex:idx_user_property_slug;not null"`
-	Description string  `json:"description" gorm:"type:text"`
-	Price       float64 `json:"price"`
-	Location    string  `json:"location"`
-	Type        string  `json:"type"`
-	Size        float64 `json:"size"`
-	Rooms       int     `json:"rooms"`
-	Bathrooms   int     `json:"bathrooms"`
-	Features    string  `json:"features" gorm:"type:text"`
-	Status      string  `json:"status" gorm:"default:'active'"`
-	UserID      uint    `json:"user_id" gorm:"uniqueIndex:idx_user_property_slug"`
-	VideoURL    *string `json:"video_url" gorm:"type:text"` // Tek video URL'i
+	Title       string         `json:"title" gorm:"not null"`
+	Slug        string         `json:"slug" gorm:"uniqueIndex:idx_user_property_slug;not null"`
+	Type        PropertyType   `json:"type" gorm:"not null"`
+	Status      PropertyStatus `json:"status" gorm:"not null"`
+	Price       float64        `json:"price" gorm:"not null"`
+	Currency    Currency       `json:"currency" gorm:"not null"`
+	Description string         `json:"description" gorm:"type:text"`
+
+	UserID uint `json:"user_id" gorm:"uniqueIndex:idx_user_property_slug"`
+
+	// Location fields
+	CountryCode string `json:"country_code" gorm:"not null"`
+	CountryName string `json:"country_name" gorm:"not null"`
+	StateCode   string `json:"state_code" gorm:"not null"`
+	StateName   string `json:"state_name" gorm:"not null"`
+	City        string `json:"city" gorm:"not null"`
+	District    string `json:"district"`
+	FullAddress string `json:"full_address" gorm:"type:text"`
+
+	// Features fields
+
+	Bedrooms        int  `json:"bedrooms"gorm:"not null"`         // Yatak odası sayısı
+	Bathrooms       int  `json:"bathrooms"gorm:"not null"`        // Banyo sayısı
+	GarageSpaces    int  `json:"garage_spaces"gorm:"not null"`    // Garaj alanı
+	AreaSqFt        int  `json:"area_sq_ft"gorm:"not null"`       // Alan (sq ft)
+	YearBuilt       int  `json:"year_built"gorm:"not null"`       // İnşa yılı
+	SwimmingPool    bool `json:"swimming_pool"gorm:"not null"`    // Havuz var mı?
+	Garden          bool `json:"garden"`                          // Bahçe var mı?
+	AirConditioning bool `json:"air_conditioning"gorm:"not null"` // Klima var mı?
+	CentralHeating  bool `json:"central_heating"gorm:"not null"`  // Merkezi ısıtma var mı?
+	SecuritySystem  bool `json:"security_system"gorm:"not null"`  // Güvenlik sistemi var mı?
 
 	// İlişkiler
 	User   User            `json:"-" gorm:"foreignKey:UserID"`

@@ -14,6 +14,7 @@ import (
 	"estepage_backend/internal/model"
 	"estepage_backend/pkg/database"
 	"estepage_backend/pkg/seed"
+	"estepage_backend/pkg/utils/location"
 )
 
 func setupRoutes(app *fiber.App) {
@@ -67,11 +68,19 @@ func setupRoutes(app *fiber.App) {
 	leads.Put("/:id/status", controller.UpdateLeadStatus)
 	leads.Put("/:id/read", controller.MarkLeadAsRead)
 
+	// Location routes
+	api.Get("/locations/countries", controller.GetLocationData)
+	api.Get("/locations/states/:countryCode", controller.GetStatesByCountry)
+	api.Get("/locations/cities/:stateCode", controller.GetCitiesByState)
 }
 
 func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Fatal("Error loading .env file")
+	}
+
+	if err := location.Init(); err != nil {
+		log.Fatal("Could not initialize location data:", err)
 	}
 
 	// Database connection
