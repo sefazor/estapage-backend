@@ -8,19 +8,30 @@ import (
 
 type User struct {
 	gorm.Model
-	Email       string `gorm:"uniqueIndex;not null"`
-	Password    string `gorm:"not null"`
-	Username    string `gorm:"uniqueIndex;not null"`
-	CompanyName string `json:"company_name" gorm:"not null"`
+	Email    string `gorm:"uniqueIndex;not null"`
+	Password string `gorm:"not null"`
+	Username string `gorm:"uniqueIndex;not null"`
 
 	// Opsiyonel profil bilgileri (settings'den güncellenecek)
-	FirstName      string `json:"first_name"`
-	LastName       string `json:"last_name"`
+
+	// Kişisel Bilgiler
+	FirstName   string `json:"first_name"`
+	LastName    string `json:"last_name"`
+	PhoneNumber string `json:"phone_number"`
+
+	// Şirket ve Görünür bilgileri
 	Title          string `json:"title"`
-	PhoneNumber    string `json:"phone_number"`
 	BusinessEmail  string `json:"business_email"`
 	WhatsAppNumber string `json:"whats_app_number"`
 	Avatar         string `json:"avatar"`
+	AboutMe        string `json:"about_me"`
+	CompanyName    string `json:"company_name" gorm:"not null"`
+
+	// Profesyonel İstatistikler
+	Experience   int     `json:"experience"`
+	TotalClients uint    `json:"total_clients"`
+	SoldScore    int     `json:"sold_score"`
+	Rating       float64 `json:"rating"`
 
 	// Sistem bilgileri
 	IsVerified     bool  `json:"is_verified" gorm:"default:false"`
@@ -46,6 +57,11 @@ func (u *User) GetPublicProfile() map[string]interface{} {
 		"business_email":   u.BusinessEmail,
 		"whats_app_number": u.WhatsAppNumber,
 		"avatar":           u.Avatar,
+		"about_me":         u.AboutMe,
+		"experience":       u.Experience,
+		"sold_score":       u.SoldScore,
+		"rating":           u.Rating,
+		"total_clients":    u.TotalClients,
 		"is_verified":      u.IsVerified,
 	}
 }

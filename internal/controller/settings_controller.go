@@ -9,13 +9,18 @@ import (
 )
 
 type ProfileUpdateInput struct {
-	FirstName      string `json:"first_name"`
-	LastName       string `json:"last_name"`
-	Title          string `json:"title"`
-	PhoneNumber    string `json:"phone_number"`
-	BusinessEmail  string `json:"business_email"`
-	WhatsAppNumber string `json:"whats_app_number"`
-	Avatar         string `json:"avatar"`
+	FirstName      string  `json:"first_name"`
+	LastName       string  `json:"last_name"`
+	Title          string  `json:"title"`
+	PhoneNumber    string  `json:"phone_number"`
+	BusinessEmail  string  `json:"business_email"`
+	WhatsAppNumber string  `json:"whats_app_number"`
+	Avatar         string  `json:"avatar"`
+	AboutMe        string  `json:"about_me"`
+	Experience     int     `json:"experience"`
+	TotalClients   uint    `json:"total_clients"`
+	SoldScore      int     `json:"sold_score"`
+	Rating         float64 `json:"rating"`
 }
 
 func UpdateProfile(c *fiber.Ctx) error {
@@ -43,6 +48,11 @@ func UpdateProfile(c *fiber.Ctx) error {
 		"business_email":   input.BusinessEmail,
 		"whats_app_number": input.WhatsAppNumber,
 		"avatar":           input.Avatar,
+		"experience":       input.Experience,
+		"total_clients":    input.TotalClients,
+		"sold_score":       input.TotalClients,
+		"rating":           input.Rating,
+		"about_me":         input.AboutMe,
 	}
 
 	if err := database.GetDB().Model(&user).Updates(updates).Error; err != nil {
