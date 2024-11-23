@@ -32,6 +32,14 @@ func setupRoutes(app *fiber.App) {
 	// Public routes
 	api.Post("/properties/:property_id/leads", controller.CreateLead) // Bu route korumasız olmalı
 
+	// Public Newsletter Routes
+	publicNewsletter := api.Group("/newsletter")
+	publicNewsletter.Post("/subscribe", controller.AddSubscriber) // Abone olma (public)
+
+	// Protected Newsletter Routes
+	protectedNewsletter := api.Group("/newsletter", middleware.AuthMiddleware())
+	protectedNewsletter.Get("/subscribers", controller.GetSubscribers) // Aboneleri listeleme (protected)
+
 	// Protected Routes (Authentication gerekir)
 	protected := api.Group("/", middleware.AuthMiddleware())
 	protected.Get("/me", controller.GetMe)
@@ -72,6 +80,7 @@ func setupRoutes(app *fiber.App) {
 	api.Get("/locations/countries", controller.GetLocationData)
 	api.Get("/locations/states/:countryCode", controller.GetStatesByCountry)
 	api.Get("/locations/cities/:stateCode", controller.GetCitiesByState)
+
 }
 
 func main() {
@@ -100,6 +109,7 @@ func main() {
 		&model.PropertyView{},  // Yeni eklendi
 		&model.PropertyStats{}, // Yeni eklendi
 		&model.Lead{},
+		&model.Subscriber{},
 	)
 	if err != nil {
 		log.Printf("Migration warning: %v", err)
