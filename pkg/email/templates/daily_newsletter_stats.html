@@ -1,54 +1,98 @@
-<!-- pkg/email/templates/daily_newsletter_stats.html -->
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="x-apple-disable-message-reformatting">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
+    <title>Daily Newsletter Statistics</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
+        @media (prefers-color-scheme: dark) {
+            .dark-mode-bg {
+                background-color: #ffff !important;
+            }
+            .dark-mode-text {
+                color: #ffffff !important;
+            }
         }
-        .stats-container {
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 20px 0;
-            text-align: center;
+        @media (max-width: 600px) {
+            .sm-w-full {
+                width: 100% !important;
+            }
+            .sm-p-16 {
+                padding: 16px !important;
+            }
+            .sm-px-16 {
+                padding-left: 16px !important;
+                padding-right: 16px !important;
+            }
         }
         .stats-number {
             font-size: 36px;
-            color: #007bff;
+            color: #003da7;
             font-weight: bold;
         }
         .stats-label {
             font-size: 16px;
-            color: #6c757d;
+            color: #6b7280;
         }
     </style>
 </head>
-<body>
-    <h1>Daily Newsletter Statistics</h1>
-    
-    <p>Hello {{.CompanyName}},</p>
-    
-    <p>Here are your newsletter statistics for {{.Date.Format "January 2, 2006"}}:</p>
-    
-    <div class="stats-container">
-        <div class="stats-number">{{.SubscriberCount}}</div>
-        <div class="stats-label">New Subscribers Today</div>
+<body style="margin: 0; width: 100%; padding: 0; word-break: break-word; -webkit-font-smoothing: antialiased; background-color: #f8fafc;">
+    <div role="article" aria-roledescription="email" aria-label="Daily Newsletter Statistics" lang="en">
+        <table style="width: 100%; font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;" cellpadding="0" cellspacing="0" role="presentation">
+            <tr>
+                <td align="center" class="dark-mode-bg" style="background-color: #f8fafc; padding: 48px 16px;">
+                    <table class="sm-w-full" style="width: 600px;" cellpadding="0" cellspacing="0" role="presentation">
+                        <tr>
+                            <td style="padding-bottom: 32px; text-align: center;">
+                                <img src="https://cdn.estapage.com/estapage-logo.svg" width="172" height="37" alt="EstePage" style="border: 0; max-width: 100%; vertical-align: middle; line-height: 100%;">
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="sm-px-16" style="background-color: #ffffff; padding: 40px; border-radius: 2px; border:0.1px solid #01010137;">
+                                <h1 style="margin: 0 0 24px; font-size: 24px; line-height: 36px; font-weight: 700; color: #111827; letter-spacing: -0.025em;">
+                                    Daily Newsletter Statistics 📊
+                                </h1>
+                                
+                                <p style="margin: 0 0 24px; font-size: 16px; line-height: 24px; color: #1f2937;">
+                                    Hello {{.CompanyName}},
+                                </p>
+                                <p style="margin: 0 0 24px; font-size: 16px; line-height: 24px; color: #1f2937;">
+                                    Here are your newsletter statistics for {{.Date.Format "January 2, 2006"}}:
+                                </p>
+                                
+                                <div style="background: #f3f4f6; padding: 24px; border-radius: 6px; text-align: center;">
+                                    <p class="stats-number">{{.SubscriberCount}}</p>
+                                    <p class="stats-label">New Subscribers Today</p>
+                                </div>
+                                
+                                <p style="margin: 24px 0 16px; font-size: 16px; color: #1f2937;">
+                                    Keep growing your subscriber base by:
+                                </p>
+                                <ul style="margin: 0 0 24px; padding: 0 0 0 20px; font-size: 16px; color: #1f2937;">
+                                    <li>Sharing your newsletter subscription form</li>
+                                    <li>Creating engaging content</li>
+                                    <li>Promoting your newsletter on social media</li>
+                                </ul>
+
+                                <p style="margin: 32px 0 24px; font-size: 16px; line-height: 24px; color: #1f2937;">
+                                    Best regards,<br>The EstaPage Team
+                                </p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding-top: 24px; text-align: center;">
+                                <p style="margin: 0; font-size: 14px; color: #6b7280;">
+                                    © 2024 EstaPage. All rights reserved.
+                                </p>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
     </div>
-
-    <p>Keep growing your subscriber base by:</p>
-    <ul>
-        <li>Sharing your newsletter subscription form</li>
-        <li>Creating engaging content</li>
-        <li>Promoting your newsletter on social media</li>
-    </ul>
-
-    <p>Best regards,<br>The EstePage Team</p>
 </body>
 </html>
