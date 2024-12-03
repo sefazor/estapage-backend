@@ -12,7 +12,9 @@ import (
 	"estepage_backend/internal/controller"
 	"estepage_backend/internal/middleware"
 	"estepage_backend/internal/model"
+	"estepage_backend/pkg/cron"
 	"estepage_backend/pkg/database"
+	"estepage_backend/pkg/email"
 	"estepage_backend/pkg/seed"
 	"estepage_backend/pkg/utils/location"
 )
@@ -24,6 +26,8 @@ func setupRoutes(app *fiber.App) {
 	auth := api.Group("/auth")
 	auth.Post("/register", controller.Register)
 	auth.Post("/login", controller.Login)
+	auth.Post("/request-reset", controller.RequestPasswordReset)
+	auth.Post("/reset-password", controller.ResetPassword)
 
 	// Public Properties Routes
 	publicProps := api.Group("/p")
@@ -32,11 +36,11 @@ func setupRoutes(app *fiber.App) {
 	// Public routes
 	api.Post("/properties/:property_id/leads", controller.CreateLead) // Bu route korumasız olmalı
 
-	// Public Newsletter Routes
+	// Public Newsletter Routes Abone ol
 	publicNewsletter := api.Group("/newsletter")
 	publicNewsletter.Post("/subscribe", controller.AddSubscriber) // Abone olma (public)
 
-	// Protected Newsletter Routes
+	// Protected Newsletter Routes Listele
 	protectedNewsletter := api.Group("/newsletter", middleware.AuthMiddleware())
 	protectedNewsletter.Get("/subscribers", controller.GetSubscribers) // Aboneleri listeleme (protected)
 
@@ -50,6 +54,10 @@ func setupRoutes(app *fiber.App) {
 	properties.Post("/", controller.CreateProperty)      // İlan oluştur
 	properties.Put("/:id", controller.UpdateProperty)    // İlan güncelle
 	properties.Delete("/:id", controller.DeleteProperty) // İlan sil
+
+	// Image upload routes aynı group altında
+	properties.Post("/:property_id/images", controller.UploadPropertyImage)
+	properties.Delete("/images/:image_id", controller.DeletePropertyImage)
 
 	// Upload routes
 	properties.Post("/:id/images", controller.UploadPropertyImage)
@@ -65,10 +73,6 @@ func setupRoutes(app *fiber.App) {
 	settings := api.Group("/settings", middleware.AuthMiddleware())
 	settings.Get("/profile", controller.GetProfile)
 	settings.Put("/profile", controller.UpdateProfile)
-
-	// Image upload routes (Protected)
-	properties.Post("/:property_id/images", controller.UploadPropertyImage)
-	properties.Delete("/images/:image_id", controller.DeletePropertyImage)
 
 	// Protected lead routes
 	leads := protected.Group("/leads")
@@ -88,6 +92,19 @@ func main() {
 		log.Fatal("Error loading .env file")
 	}
 
+	// Initialize email service globally
+	if err := email.InitEmailService(os.Getenv("RESEND_API_KEY")); err != nil {
+		log.Fatal("Could not initialize email service:", err)
+	}
+	log.Printf("Email service initialized with API key: %s", os.Getenv("RESEND_API_KEY"))
+
+	// Init controllers and crons without passing email service
+	controller.InitAuthController()
+	controller.InitLeadController()
+	cron.InitNewsletterCron()
+	controller.InitSubscriptionController()
+	cron.InitSubscriptionExpiryCron()
+
 	if err := location.Init(); err != nil {
 		log.Fatal("Could not initialize location data:", err)
 	}
@@ -99,15 +116,15 @@ func main() {
 	}
 
 	database.InitDB(dbURL)
-
-	err := database.MigrateDatabase(
+	var err error
+	err = database.MigrateDatabase(
 		&model.User{},
 		&model.Subscription{},
 		&model.UserSubscription{},
 		&model.Property{},
 		&model.PropertyImage{},
-		&model.PropertyView{},  // Yeni eklendi
-		&model.PropertyStats{}, // Yeni eklendi
+		&model.PropertyView{},
+		&model.PropertyStats{},
 		&model.Lead{},
 		&model.Subscriber{},
 	)

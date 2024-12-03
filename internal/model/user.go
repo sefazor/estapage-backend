@@ -2,6 +2,7 @@ package model
 
 import (
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -40,6 +41,10 @@ type User struct {
 	// İlişkiler
 	Properties   []Property    `json:"-"`
 	Subscription *Subscription `json:"-" gorm:"foreignKey:SubscriptionID"`
+
+	// Password reset için yeni alanlar
+	PasswordResetToken string `gorm:"index"`
+	ResetTokenExpires  time.Time
 }
 
 func (u *User) GetFullName() string {

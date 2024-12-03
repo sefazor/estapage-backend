@@ -1,0 +1,54 @@
+<!-- pkg/email/templates/daily_newsletter_stats.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .stats-container {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .stats-number {
+            font-size: 36px;
+            color: #007bff;
+            font-weight: bold;
+        }
+        .stats-label {
+            font-size: 16px;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <h1>Daily Newsletter Statistics</h1>
+    
+    <p>Hello {{.CompanyName}},</p>
+    
+    <p>Here are your newsletter statistics for {{.Date.Format "January 2, 2006"}}:</p>
+    
+    <div class="stats-container">
+        <div class="stats-number">{{.SubscriberCount}}</div>
+        <div class="stats-label">New Subscribers Today</div>
+    </div>
+
+    <p>Keep growing your subscriber base by:</p>
+    <ul>
+        <li>Sharing your newsletter subscription form</li>
+        <li>Creating engaging content</li>
+        <li>Promoting your newsletter on social media</li>
+    </ul>
+
+    <p>Best regards,<br>The EstePage Team</p>
+</body>
+</html>

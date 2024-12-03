@@ -85,10 +85,13 @@ type Property struct {
 
 type PropertyImage struct {
 	gorm.Model
-	PropertyID uint   `json:"property_id"`
-	URL        string `json:"url" gorm:"not null"`
-	IsCover    bool   `json:"is_cover" gorm:"default:false"`
-	Order      int    `json:"order" gorm:"default:0"`
+	PropertyID   uint   `json:"property_id" gorm:"not null"` // not null eklendi
+	URL          string `json:"url" gorm:"not null"`
+	CloudflareID string `json:"cloudflare_id" gorm:"unique"`
+	ThumbnailURL string `json:"thumbnail_url"`
+	Size         int64  `json:"size"`
+	IsCover      bool   `json:"is_cover" gorm:"default:false"`
+	Order        int    `json:"order" gorm:"default:0"`
 
 	Property Property `json:"-" gorm:"foreignKey:PropertyID"`
 }

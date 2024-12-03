@@ -3,7 +3,9 @@ package controller
 import (
 	"estepage_backend/internal/model"
 	"estepage_backend/pkg/database"
+	"estepage_backend/pkg/email"
 	"estepage_backend/pkg/utils/jwt"
+	"log"
 	"strconv"
 	"time"
 
@@ -17,6 +19,8 @@ type LeadInput struct {
 	Message string `json:"message"`
 }
 
+func InitLeadController() {}
+
 func CreateLead(c *fiber.Ctx) error {
 	propertyIDStr := c.Params("property_id")
 	propertyID, err := strconv.ParseUint(propertyIDStr, 10, 32)
@@ -26,9 +30,8 @@ func CreateLead(c *fiber.Ctx) error {
 		})
 	}
 
-	// Property'nin varlığını kontrol et
 	var property model.Property
-	if err := database.GetDB().First(&property, propertyID).Error; err != nil {
+	if err := database.GetDB().Preload("User").First(&property, propertyID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Property not found",
 		})
@@ -56,12 +59,25 @@ func CreateLead(c *fiber.Ctx) error {
 		})
 	}
 
+	if email.GlobalEmailService != nil {
+		err := email.GlobalEmailService.SendLeadNotificationEmail(
+			property.User.Email,
+			property.Title,
+			input.Name,
+			input.Email,
+			input.Phone,
+			input.Message,
+		)
+		if err != nil {
+			log.Printf("Could not send lead notification email: %v", err)
+		}
+	}
+
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": "Your inquiry has been sent successfully. The agent will contact you soon.",
 	})
 }
 
-// GetMyLeads kullanıcının tüm ilanlarına gelen başvuruları listeler
 func GetMyLeads(c *fiber.Ctx) error {
 	claims := c.Locals("user").(*jwt.Claims)
 
@@ -71,7 +87,6 @@ func GetMyLeads(c *fiber.Ctx) error {
 		Where("properties.user_id = ?", claims.UserID).
 		Preload("Property")
 
-	// Filtreleme
 	if status := c.Query("status"); status != "" {
 		query = query.Where("leads.status = ?", status)
 	}
@@ -84,7 +99,6 @@ func GetMyLeads(c *fiber.Ctx) error {
 		query = query.Where("leads.property_id = ?", propertyID)
 	}
 
-	// Sıralama
 	if sortBy := c.Query("sort"); sortBy != "" {
 		query = query.Order(sortBy)
 	} else {
@@ -100,7 +114,6 @@ func GetMyLeads(c *fiber.Ctx) error {
 	return c.JSON(leads)
 }
 
-// UpdateLeadStatus lead durumunu günceller
 func UpdateLeadStatus(c *fiber.Ctx) error {
 	claims := c.Locals("user").(*jwt.Claims)
 	leadID := c.Params("id")
@@ -112,7 +125,6 @@ func UpdateLeadStatus(c *fiber.Ctx) error {
 		})
 	}
 
-	// İlan sahibi kontrolü
 	if lead.Property.UserID != claims.UserID {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"error": "Not authorized to update this lead",
@@ -129,7 +141,6 @@ func UpdateLeadStatus(c *fiber.Ctx) error {
 		})
 	}
 
-	// Status değerini kontrol et
 	validStatuses := map[string]bool{
 		"new":       true,
 		"contacted": true,
@@ -148,7 +159,6 @@ func UpdateLeadStatus(c *fiber.Ctx) error {
 		"status": input.Status,
 	}
 
-	// Eğer durum "contacted" ise contacted_at'i güncelle
 	if input.Status == "contacted" {
 		now := time.Now()
 		updates["contacted_at"] = &now
@@ -163,7 +173,6 @@ func UpdateLeadStatus(c *fiber.Ctx) error {
 	return c.JSON(lead)
 }
 
-// MarkLeadAsRead lead'i okundu olarak işaretler
 func MarkLeadAsRead(c *fiber.Ctx) error {
 	claims := c.Locals("user").(*jwt.Claims)
 	leadID := c.Params("id")
@@ -175,7 +184,6 @@ func MarkLeadAsRead(c *fiber.Ctx) error {
 		})
 	}
 
-	// İlan sahibi kontrolü
 	if lead.Property.UserID != claims.UserID {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"error": "Not authorized to update this lead",

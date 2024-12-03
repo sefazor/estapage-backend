@@ -3,6 +3,7 @@ package controller
 import (
 	"estepage_backend/internal/model"
 	"estepage_backend/pkg/database"
+	"estepage_backend/pkg/email"
 	"estepage_backend/pkg/utils/jwt"
 	"fmt"
 	"strconv"
@@ -190,4 +191,100 @@ func RecordPropertyView(c *fiber.Ctx) error {
 	}
 
 	return c.SendStatus(fiber.StatusOK)
+}
+
+// Test endpoints for property stats
+func TestPropertyStats(c *fiber.Ctx) error {
+	claims := c.Locals("user").(*jwt.Claims)
+	statType := c.Query("type", "weekly") // weekly veya monthly
+
+	if email.GlobalEmailService == nil {
+
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Email service not initialized",
+		})
+	}
+
+	var startDate time.Time
+	if statType == "monthly" {
+		startDate = time.Now().AddDate(0, -1, 0) // 1 ay önce
+	} else {
+		startDate = time.Now().AddDate(0, 0, -7) // 1 hafta önce
+	}
+
+	var stats struct {
+		UserEmail        string
+		CompanyName      string
+		TotalProperties  int64
+		TotalViews       int64
+		UniqueViews      int64
+		TopProperty      string
+		TopPropertyViews int64
+		LeadCount        int64
+	}
+
+	err := database.GetDB().Raw(`
+        SELECT 
+            u.email as user_email,
+            u.company_name,
+            COUNT(DISTINCT p.id) as total_properties,
+            COUNT(pv.id) as total_views,
+            COUNT(DISTINCT pv.ip) as unique_views,
+            (
+                SELECT p2.title 
+                FROM properties p2 
+                LEFT JOIN property_views pv2 ON p2.id = pv2.property_id
+                WHERE p2.user_id = ? AND pv2.created_at >= ?
+                GROUP BY p2.id
+                ORDER BY COUNT(pv2.id) DESC
+                LIMIT 1
+            ) as top_property,
+            (
+                SELECT COUNT(pv3.id)
+                FROM properties p3 
+                LEFT JOIN property_views pv3 ON p3.id = pv3.property_id
+                WHERE p3.user_id = ? AND pv3.created_at >= ?
+                GROUP BY p3.id
+                ORDER BY COUNT(pv3.id) DESC
+                LIMIT 1
+            ) as top_property_views,
+            COUNT(l.id) as lead_count
+        FROM users u
+        LEFT JOIN properties p ON u.id = p.user_id
+        LEFT JOIN property_views pv ON p.id = pv.property_id AND pv.created_at >= ?
+        LEFT JOIN leads l ON p.id = l.property_id AND l.created_at >= ?
+        WHERE u.id = ?
+        GROUP BY u.id
+    `, claims.UserID, startDate, claims.UserID, startDate, startDate, startDate, claims.UserID).Scan(&stats).Error
+
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Error fetching stats: %v", err),
+		})
+	}
+
+	// Send email
+	err = email.GlobalEmailService.SendPropertyStats(
+		stats.UserEmail,
+		stats.CompanyName,
+		statType,
+		stats.TotalProperties,
+		stats.TotalViews,
+		stats.UniqueViews,
+		stats.TopProperty,
+		stats.TopPropertyViews,
+		stats.LeadCount,
+		startDate,
+	)
+
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Error sending stats email: %v", err),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": fmt.Sprintf("%s stats email sent successfully", statType),
+		"stats":   stats,
+	})
 }

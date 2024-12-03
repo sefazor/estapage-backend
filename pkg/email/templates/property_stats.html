@@ -1,0 +1,86 @@
+<!-- pkg/email/templates/property_stats.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .stats-container {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .stat-box {
+            text-align: center;
+            margin: 15px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stat-number {
+            font-size: 24px;
+            color: #007bff;
+            font-weight: bold;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #6c757d;
+        }
+        .highlight-box {
+            background: #e8f4ff;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Your {{.Period}} Property Statistics</h1>
+    
+    <p>Hello {{.CompanyName}},</p>
+    
+    <p>Here are your property statistics for the past {{if eq .Period "weekly"}}week{{else}}month{{end}}:</p>
+    
+    <div class="stats-container">
+        <div class="stat-box">
+            <div class="stat-number">{{.TotalViews}}</div>
+            <div class="stat-label">Total Views</div>
+        </div>
+        
+        <div class="stat-box">
+            <div class="stat-number">{{.UniqueViews}}</div>
+            <div class="stat-label">Unique Visitors</div>
+        </div>
+
+        <div class="stat-box">
+            <div class="stat-number">{{.LeadCount}}</div>
+            <div class="stat-label">New Leads</div>
+        </div>
+    </div>
+
+    <div class="highlight-box">
+        <h3>Top Performing Property</h3>
+        <p><strong>{{.TopProperty}}</strong></p>
+        <p>Received {{.TopPropertyViews}} views</p>
+    </div>
+
+    <p>Tips to increase your property views:</p>
+    <ul>
+        <li>Add high-quality photos</li>
+        <li>Keep your listings up to date</li>
+        <li>Share your properties on social media</li>
+        <li>Complete all property details</li>
+    </ul>
+
+    <p>Best regards,<br>The EstePage Team</p>
+</body>
+</html>

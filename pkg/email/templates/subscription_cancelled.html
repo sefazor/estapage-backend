@@ -1,0 +1,86 @@
+<!-- pkg/email/templates/subscription_cancelled.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .notice {
+            background: #fff3cd;
+            border: 1px solid #ffeeba;
+            color: #856404;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .info-box {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .plan-name {
+            font-size: 20px;
+            color: #007bff;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .cta-button {
+            background: #007bff;
+            color: white;
+            padding: 12px 25px;
+            text-decoration: none;
+            border-radius: 5px;
+            display: inline-block;
+            margin: 15px 0;
+        }
+        .reactivate {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            border: 1px solid #dee2e6;
+        }
+    </style>
+</head>
+<body>
+    <h1>Subscription Cancelled</h1>
+    
+    <p>Hello {{.CompanyName}},</p>
+    
+    <div class="notice">
+        <p>Your subscription to {{.PlanName}} has been cancelled. Your subscription will remain active until <strong>{{.ExpiresAt.Format "January 2, 2006"}}</strong>.</p>
+    </div>
+
+    <div class="info-box">
+        <p>Until your subscription expires, you can still:</p>
+        <ul>
+            <li>Access all your existing property listings</li>
+            <li>View analytics and stats</li>
+            <li>Manage your leads</li>
+            <li>Use all premium features</li>
+        </ul>
+    </div>
+
+    <div class="reactivate">
+        <h3>Want to Reactivate?</h3>
+        <p>You can reactivate your subscription anytime before it expires to maintain uninterrupted access to all features.</p>
+        <a href="https://estepage.com/dashboard/subscription" class="cta-button">Reactivate Subscription</a>
+    </div>
+
+    <p>If you have any questions about your subscription or need assistance, please don't hesitate to contact our support team.</p>
+
+    <p>Best regards,<br>The EstePage Team</p>
+
+    <div style="font-size: 0.9em; color: #6c757d; margin-top: 20px; padding-top: 20px; border-top: 1px solid #dee2e6;">
+        <p>If you did not request this cancellation, please contact us immediately.</p>
+    </div>
+</body>
+</html>
