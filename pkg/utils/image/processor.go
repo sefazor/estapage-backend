@@ -1,10 +1,14 @@
-// pkg/utils/image/processor.go
 package image
 
 import (
-	"errors"
-	"path/filepath"
-	"strings"
+	"bytes"
+	"fmt"
+	"image"
+	"image/jpeg"
+	"image/png"
+	"mime/multipart"
+
+	"github.com/chai2010/webp"
 )
 
 const (
@@ -12,26 +16,48 @@ const (
 )
 
 var (
-	ErrFileSize = errors.New("file size exceeds limit")
-	ErrFileType = errors.New("invalid file type")
-
 	AllowedImageTypes = map[string]bool{
-		".jpg":  true,
-		".jpeg": true,
-		".png":  true,
+		"image/jpeg": true,
+		"image/png":  true,
+		"image/webp": true,
 	}
 )
 
-// ValidateImage dosya kontrollerini yapar
-func ValidateImage(filename string, size int64) error {
-	if size > MaxImageSize {
-		return ErrFileSize
+func ProcessImage(file *multipart.FileHeader) (*bytes.Buffer, string, error) {
+	// Dosyayı aç
+	src, err := file.Open()
+	if err != nil {
+		return nil, "", fmt.Errorf("could not open file: %v", err)
+	}
+	defer src.Close()
+
+	// Resmi decode et
+	img, format, err := image.Decode(src)
+	if err != nil {
+		return nil, "", fmt.Errorf("could not decode image: %v", err)
 	}
 
-	ext := strings.ToLower(filepath.Ext(filename))
-	if !AllowedImageTypes[ext] {
-		return ErrFileType
+	// Buffer oluştur
+	buf := new(bytes.Buffer)
+
+	// Resmi optimize et ve encode et
+	switch format {
+	case "jpeg":
+		err = jpeg.Encode(buf, img, &jpeg.Options{Quality: 85})
+	case "png":
+		err = png.Encode(buf, img)
+	case "webp":
+		err = webp.Encode(buf, img, &webp.Options{Lossless: false, Quality: 85})
+	default:
+		return nil, "", fmt.Errorf("unsupported image format: %s", format)
 	}
 
-	return nil
+	if err != nil {
+		return nil, "", fmt.Errorf("could not encode image: %v", err)
+	}
+
+	// Content type belirle
+	contentType := fmt.Sprintf("image/%s", format)
+
+	return buf, contentType, nil
 }

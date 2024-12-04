@@ -1,4 +1,3 @@
-// pkg/utils/validation/image.go
 package validation
 
 import (

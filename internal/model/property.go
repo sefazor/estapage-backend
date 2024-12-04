@@ -120,3 +120,45 @@ func (p *Property) BeforeCreate(tx *gorm.DB) error {
 	}
 	return nil
 }
+
+func (p *Property) BeforeSave(tx *gorm.DB) error {
+	// Türkçe karakter haritası
+	replacer := strings.NewReplacer(
+		"ı", "i",
+		"ğ", "g",
+		"ü", "u",
+		"ş", "s",
+		"ö", "o",
+		"ç", "c",
+		"İ", "i",
+		"Ğ", "g",
+		"Ü", "u",
+		"Ş", "s",
+		"Ö", "o",
+		"Ç", "c",
+		" ", "-",
+		"_", "-",
+	)
+
+	// Önce title'ı küçült ve Türkçe karakterleri değiştir
+	slug := strings.ToLower(replacer.Replace(p.Title))
+
+	// Alfanumerik ve tire dışındaki karakterleri kaldır
+	slug = strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+			return r
+		}
+		return -1
+	}, slug)
+
+	// Birden fazla tireyi tek tireye indir
+	slug = strings.Join(strings.FieldsFunc(slug, func(r rune) bool {
+		return r == '-'
+	}), "-")
+
+	// Baştaki ve sondaki tireleri temizle
+	slug = strings.Trim(slug, "-")
+
+	p.Slug = slug
+	return nil
+}

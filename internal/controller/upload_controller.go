@@ -14,8 +14,8 @@ import (
 
 func UploadPropertyImage(c *fiber.Ctx) error {
 	claims := c.Locals("user").(*jwt.Claims)
-
 	propertyID := c.Params("property_id")
+
 	log.Printf("Upload request for propertyID: '%s'", propertyID)
 
 	if propertyID == "" {
@@ -47,6 +47,14 @@ func UploadPropertyImage(c *fiber.Ctx) error {
 		})
 	}
 
+	// Kullanıcı ve property bilgilerini al
+	var user model.User
+	if err := database.GetDB().First(&user, claims.UserID).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Could not fetch user details",
+		})
+	}
+
 	// Kaydedilecek görsel sayısını kontrol et
 	var imageCount int64
 	if err := database.GetDB().Model(&model.PropertyImage{}).
@@ -71,8 +79,15 @@ func UploadPropertyImage(c *fiber.Ctx) error {
 		})
 	}
 
-	// Cloudflare'e yükle
-	imageURL, err := cloudflare.UploadImage(file)
+	// Upload config'i hazırla ve kullan
+	config := cloudflare.UploadImageConfig{
+		File:         file,
+		Username:     user.Username,
+		PropertySlug: property.Slug,
+	}
+
+	// Cloudflare R2'ye yükle
+	result, err := cloudflare.UploadImage(config) // config'i burada kullan
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": fmt.Sprintf("Could not upload image: %v", err),
@@ -81,10 +96,11 @@ func UploadPropertyImage(c *fiber.Ctx) error {
 
 	// Veritabanına kaydet
 	image := model.PropertyImage{
-		PropertyID: uint(propertyIDUint),
-		URL:        imageURL,
-		Order:      int(imageCount),
-		IsCover:    imageCount == 0,
+		PropertyID:   uint(propertyIDUint),
+		URL:          result.URL,
+		CloudflareID: result.CloudflareID,
+		Order:        int(imageCount),
+		IsCover:      imageCount == 0,
 	}
 
 	if err := database.GetDB().Create(&image).Error; err != nil {
@@ -121,11 +137,9 @@ func DeletePropertyImage(c *fiber.Ctx) error {
 		})
 	}
 
-	// Cloudflare'den sil
-	if image.CloudflareID != "" {
-		if err := cloudflare.DeleteImage(image.CloudflareID); err != nil {
-			log.Printf("Error deleting image from Cloudflare: %v", err)
-		}
+	// Cloudflare R2'den sil - artık tam URL'i kullanıyoruz
+	if err := cloudflare.DeleteImage(image.URL); err != nil {
+		log.Printf("Error deleting image from Cloudflare R2: %v", err)
 	}
 
 	// Database'den sil

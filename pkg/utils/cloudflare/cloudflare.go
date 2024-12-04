@@ -1,140 +1,126 @@
-// pkg/utils/cloudflare/cloudflare.go
 package cloudflare
 
 import (
-	"bytes"
-	"encoding/json"
+	"context"
 	"fmt"
-	"io"
 	"mime/multipart"
-	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/google/uuid"
+	"github.com/gosimple/slug"
 )
 
-type CloudflareUploadResponse struct {
-	Success bool `json:"success"`
-	Result  struct {
-		ID  string `json:"id"`
-		URL string `json:"url"`
-	} `json:"result"`
-	Errors []struct {
-		Message string `json:"message"`
-	} `json:"errors"`
-}
-
-func UploadImage(file *multipart.FileHeader) (string, error) {
-	accountID := os.Getenv("CLOUDFLARE_ACCOUNT_ID")
-	apiToken := os.Getenv("CLOUDFLARE_API_TOKEN")
-
-	if accountID == "" || apiToken == "" {
-		return "", fmt.Errorf("missing Cloudflare credentials")
+func getS3Client() (*s3.Client, error) {
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			os.Getenv("R2_ACCESS_KEY"),
+			os.Getenv("R2_SECRET_KEY"),
+			"",
+		)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to load SDK config: %v", err)
 	}
 
-	// API endpoint
-	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/images/v1", accountID)
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(fmt.Sprintf("https://%s.r2.cloudflarestorage.com", os.Getenv("R2_ACCOUNT_ID")))
+		o.UsePathStyle = true
+		o.Region = "auto"
+	})
 
-	// Dosyayı aç
-	src, err := file.Open()
+	return client, nil
+}
+
+type UploadImageConfig struct {
+	File         *multipart.FileHeader
+	Username     string
+	PropertySlug string
+}
+
+type UploadResult struct {
+	URL          string
+	CloudflareID string
+}
+
+func UploadImage(config UploadImageConfig) (UploadResult, error) {
+
+	// Klasör isimlerini URL-safe hale getir
+	safeUsername := slug.Make(config.Username)
+	safePropertySlug := slug.Make(config.PropertySlug)
+
+	// Unique dosya adı oluştur
+	ext := filepath.Ext(config.File.Filename)
+	uniqueID := fmt.Sprintf("%d-%s", time.Now().UnixNano(), uuid.New().String())
+	uniqueFilename := uniqueID + ext
+
+	// Organize edilmiş ve URL-safe path yapısı
+	objectKey := filepath.Join("users", safeUsername, "properties", safePropertySlug, "images", uniqueFilename)
+
+	client, err := getS3Client()
 	if err != nil {
-		return "", fmt.Errorf("could not open file: %v", err)
+		return UploadResult{}, err
+	}
+
+	src, err := config.File.Open()
+	if err != nil {
+		return UploadResult{}, fmt.Errorf("could not open file: %v", err)
 	}
 	defer src.Close()
 
-	// Multipart form oluştur
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
+	input := &s3.PutObjectInput{
+		Bucket: aws.String(os.Getenv("R2_BUCKET_NAME")),
+		Key:    aws.String(objectKey),
+		Body:   src,
+	}
 
-	// Dosyayı forma ekle
-	part, err := writer.CreateFormFile("file", filepath.Base(file.Filename))
+	_, err = client.PutObject(context.TODO(), input)
 	if err != nil {
-		return "", fmt.Errorf("could not create form file: %v", err)
+		return UploadResult{}, fmt.Errorf("could not upload file to R2: %v", err)
 	}
 
-	if _, err = io.Copy(part, src); err != nil {
-		return "", fmt.Errorf("could not copy file: %v", err)
-	}
-	writer.Close()
-
-	// HTTP isteği oluştur
-	request, err := http.NewRequest("POST", url, body)
-	if err != nil {
-		return "", fmt.Errorf("could not create request: %v", err)
-	}
-
-	request.Header.Set("Authorization", "Bearer "+apiToken)
-	request.Header.Set("Content-Type", writer.FormDataContentType())
-
-	// İsteği gönder
-	client := &http.Client{}
-	response, err := client.Do(request)
-	if err != nil {
-		return "", fmt.Errorf("could not send request: %v", err)
-	}
-	defer response.Body.Close()
-
-	// Yanıtı parse et
-	var result CloudflareUploadResponse
-	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("could not decode response: %v", err)
-	}
-
-	if !result.Success {
-		if len(result.Errors) > 0 {
-			return "", fmt.Errorf("cloudflare error: %s", result.Errors[0].Message)
-		}
-		return "", fmt.Errorf("unknown cloudflare error")
-	}
-
-	return result.Result.URL, nil
+	return UploadResult{
+		URL:          fmt.Sprintf("https://cdn.estapage.com/%s", objectKey),
+		CloudflareID: uniqueID,
+	}, nil
 }
 
-func DeleteImage(cloudflareID string) error {
-	accountID := os.Getenv("CLOUDFLARE_ACCOUNT_ID")
-	apiToken := os.Getenv("CLOUDFLARE_API_TOKEN")
+func DeleteImage(fullURL string) error {
+	// URL'den object key'i çıkar
+	objectKey := getObjectKeyFromURL(fullURL)
 
-	if accountID == "" || apiToken == "" {
-		return fmt.Errorf("missing Cloudflare credentials")
-	}
-
-	// API endpoint
-	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/images/v1/%s",
-		accountID, cloudflareID)
-
-	// HTTP isteği oluştur
-	request, err := http.NewRequest("DELETE", url, nil)
+	client, err := getS3Client()
 	if err != nil {
-		return fmt.Errorf("could not create request: %v", err)
+		return err
 	}
 
-	request.Header.Set("Authorization", "Bearer "+apiToken)
+	input := &s3.DeleteObjectInput{
+		Bucket: aws.String(os.Getenv("R2_BUCKET_NAME")),
+		Key:    aws.String(objectKey),
+	}
 
-	// İsteği gönder
-	client := &http.Client{}
-	response, err := client.Do(request)
+	_, err = client.DeleteObject(context.TODO(), input)
 	if err != nil {
-		return fmt.Errorf("could not send request: %v", err)
-	}
-	defer response.Body.Close()
-
-	// Yanıtı parse et
-	var result struct {
-		Success bool `json:"success"`
-		Errors  []struct {
-			Message string `json:"message"`
-		} `json:"errors"`
-	}
-
-	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
-		return fmt.Errorf("could not decode response: %v", err)
-	}
-
-	if !result.Success {
-		if len(result.Errors) > 0 {
-			return fmt.Errorf("cloudflare error: %s", result.Errors[0].Message)
-		}
-		return fmt.Errorf("unknown cloudflare error")
+		return fmt.Errorf("could not delete file from R2: %v", err)
 	}
 
 	return nil
+}
+
+// GetFileNameFromURL sadece dosya adını döndürür
+func GetFileNameFromURL(url string) string {
+	parts := strings.Split(url, "/")
+	return parts[len(parts)-1]
+}
+
+// getObjectKeyFromURL tam object key'i döndürür (users/username/properties/slug/images/filename)
+func getObjectKeyFromURL(url string) string {
+	// https://cdn.estapage.com/ kısmını kaldır
+	return strings.TrimPrefix(url, "https://cdn.estapage.com/")
 }

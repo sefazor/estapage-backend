@@ -3,7 +3,9 @@ package controller
 import (
 	"estepage_backend/internal/model"
 	"estepage_backend/pkg/database"
+	"estepage_backend/pkg/utils/cloudflare"
 	"estepage_backend/pkg/utils/jwt"
+
 	"fmt"
 	"os"
 	"strings"
@@ -101,7 +103,7 @@ func CreateProperty(c *fiber.Ctx) error {
 	}
 
 	for i, imageURL := range input.Images {
-		if strings.HasPrefix(imageURL, "https://"+os.Getenv("AWS_BUCKET_NAME")) {
+		if strings.HasPrefix(imageURL, "https://"+os.Getenv("R2_BUCKET_NAME")) {
 			image := model.PropertyImage{
 				PropertyID: property.ID,
 				URL:        imageURL,
@@ -189,11 +191,28 @@ func UpdateProperty(c *fiber.Ctx) error {
 	}
 
 	// Mevcut resimleri sil
-	if err := tx.Where("property_id = ?", property.ID).Delete(&model.PropertyImage{}).Error; err != nil {
+	var oldImages []model.PropertyImage
+	if err := tx.Where("property_id = ?", property.ID).Find(&oldImages).Error; err != nil {
 		tx.Rollback()
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Could not update images",
+			"error": "Could not fetch old images",
 		})
+	}
+
+	for _, oldImage := range oldImages {
+		fileName := cloudflare.GetFileNameFromURL(oldImage.URL)
+		if err := cloudflare.DeleteImage(fileName); err != nil {
+			tx.Rollback()
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Could not delete old image from Cloudflare R2",
+			})
+		}
+		if err := tx.Delete(&oldImage).Error; err != nil {
+			tx.Rollback()
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Could not delete old image from database",
+			})
+		}
 	}
 
 	// Yeni resimleri kaydet
@@ -330,7 +349,7 @@ func DeleteProperty(c *fiber.Ctx) error {
 	claims := c.Locals("user").(*jwt.Claims)
 	id := c.Params("id")
 
-	var property model.Property // property.Property yerine model.Property
+	var property model.Property
 	if err := database.GetDB().First(&property, id).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Property not found",
@@ -345,6 +364,25 @@ func DeleteProperty(c *fiber.Ctx) error {
 	}
 
 	tx := database.GetDB().Begin()
+
+	// İlişkili resimleri Cloudflare R2'den sil
+	var images []model.PropertyImage
+	if err := tx.Where("property_id = ?", property.ID).Find(&images).Error; err != nil {
+		tx.Rollback()
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Could not fetch property images",
+		})
+	}
+
+	for _, image := range images {
+		fileName := cloudflare.GetFileNameFromURL(image.URL)
+		if err := cloudflare.DeleteImage(fileName); err != nil {
+			tx.Rollback()
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Could not delete image from Cloudflare R2",
+			})
+		}
+	}
 
 	// Property'yi ve ilişkili kayıtları sil
 	if err := tx.Delete(&property).Error; err != nil {
