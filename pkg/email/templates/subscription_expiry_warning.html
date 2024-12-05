@@ -1,81 +1,92 @@
-<!-- pkg/email/templates/subscription_expiry_warning.html -->
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="x-apple-disable-message-reformatting">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
+    <title>Subscription Expiry Warning</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
+        @media (prefers-color-scheme: dark) {
+            .dark-mode-bg {
+                background-color: #ffff !important;
+            }
+            .dark-mode-text {
+                color: #ffffff !important;
+            }
+        }
+        @media (max-width: 600px) {
+            .sm-w-full {
+                width: 100% !important;
+            }
+            .sm-p-16 {
+                padding: 16px !important;
+            }
+            .sm-px-16 {
+                padding-left: 16px !important;
+                padding-right: 16px !important;
+            }
         }
         .warning-box {
-            background: #fff3cd;
-            border: 1px solid #ffeeba;
-            color: #856404;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 20px 0;
-        }
-        .plan-info {
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 20px 0;
-        }
-        .cta-button {
-            background: #007bff;
-            color: white;
-            padding: 12px 25px;
-            text-decoration: none;
-            border-radius: 5px;
-            display: inline-block;
-            margin: 15px 0;
-        }
-        .feature-list {
-            background: #f1f3f5;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 15px 0;
+            background: #fef3c7;
+            padding: 24px;
+            border-radius: 6px;
+            margin-bottom: 24px;
+            color: #854d0e;
         }
     </style>
 </head>
-<body>
-    <h1>Subscription Expiring Soon</h1>
-    
-    <p>Hello {{.CompanyName}},</p>
-    
-    <div class="warning-box">
-        <h3>⚠️ Action Required</h3>
-        <p>Your {{.PlanName}} subscription will expire in <strong>{{.DaysLeft}} days</strong> (on {{.ExpiryDate.Format "January 2, 2006"}}).</p>
+<body style="margin: 0; padding: 0; width: 100%; word-break: break-word; -webkit-font-smoothing: antialiased; background-color: #f8fafc;">
+    <div role="article" aria-roledescription="email" aria-label="Subscription Expiry Warning" lang="en">
+        <table style="width: 100%; font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;" cellpadding="0" cellspacing="0" role="presentation">
+            <tr>
+                <td align="center" style="padding: 48px 16px; background-color: #f8fafc;">
+                    <table style="width: 600px;" cellpadding="0" cellspacing="0" role="presentation">
+                        <tr>
+                            <td style="padding-bottom: 32px; text-align: center;">
+                                <img src="https://cdn.estapage.com/estapage-logo.svg" width="172" height="37" alt="EstaPage" style="border: 0; max-width: 100%; vertical-align: middle;">
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="background-color: #ffffff; padding: 40px; border-radius: 6px; border: 0.1px solid #d1d5db;">
+                                <h1 style="margin-bottom: 24px; font-size: 24px; line-height: 36px; color: #111827;">Subscription Expiring Soon</h1>
+                                <p style="margin-bottom: 16px; font-size: 16px; color: #1f2937;">
+                                    Hello {{.CompanyName}},
+                                </p>
+                                <div class="warning-box">
+                                    <h3 style="margin: 0 0 16px; font-size: 18px; font-weight: 600;">⚠️ Action Required</h3>
+                                    <p style="margin: 0; font-size: 16px; color: #854d0e;">
+                                        Your {{.PlanName}} subscription will expire in <strong>{{.DaysLeft}} days</strong> (on {{.ExpiryDate.Format "January 2, 2006"}}).
+                                    </p>
+                                </div>
+                                <p style="margin-bottom: 16px; font-size: 16px; color: #1f2937;">
+                                    To maintain uninterrupted access to all features, ensure:
+                                </p>
+                                <ul style="margin-bottom: 24px; padding-left: 20px; font-size: 16px; color: #1f2937;">
+                                    <li>Your payment method is up to date</li>
+                                    <li>Sufficient funds are available</li>
+                                    <li>Your account details are current</li>
+                                </ul>
+                                <div style="text-align: center;">
+                                    <a href="https://estapage.com/dashboard/subscription" style="background-color: #003da7; color: #ffffff; padding: 16px 32px; border-radius: 3px; text-decoration: none; font-weight: 600;">Manage Subscription</a>
+                                </div>
+                                <p style="margin-top: 32px; font-size: 16px; color: #1f2937;">
+                                    Best regards,<br>The EstaPage Team
+                                </p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding-top: 24px; text-align: center;">
+                                <p style="font-size: 14px; color: #6b7280;">
+                                    © 2024 EstaPage. All rights reserved.
+                                </p>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
     </div>
-
-    <div class="plan-info">
-        <p>When your subscription expires, you will lose access to:</p>
-        <ul>
-            <li>Creating new property listings</li>
-            <li>Premium analytics features</li>
-            <li>Advanced lead management</li>
-            <li>Priority support</li>
-        </ul>
-    </div>
-
-    <p>To maintain uninterrupted access to all features, please ensure:</p>
-    <ul>
-        <li>Your payment method is up to date</li>
-        <li>You have sufficient funds available</li>
-        <li>Your account details are current</li>
-    </ul>
-
-    <p style="text-align: center;">
-        <a href="https://estepage.com/dashboard/subscription" class="cta-button">Manage Subscription</a>
-    </p>
-
-    <p>If you need any assistance, our support team is here to help.</p>
-
-    <p>Best regards,<br>The EstePage Team</p>
 </body>
 </html>

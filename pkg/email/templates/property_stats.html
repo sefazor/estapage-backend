@@ -1,86 +1,137 @@
-<!-- pkg/email/templates/property_stats.html -->
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="x-apple-disable-message-reformatting">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
+    <title>Your Property Statistics</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
+        @media (prefers-color-scheme: dark) {
+            .dark-mode-bg {
+                background-color: #ffff !important;
+            }
+            .dark-mode-text {
+                color: #ffffff !important;
+            }
+        }
+        @media (max-width: 600px) {
+            .sm-w-full {
+                width: 100% !important;
+            }
+            .sm-p-16 {
+                padding: 16px !important;
+            }
+            .sm-px-16 {
+                padding-left: 16px !important;
+                padding-right: 16px !important;
+            }
         }
         .stats-container {
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 20px 0;
+            background: #f3f4f6;
+            padding: 24px;
+            border-radius: 6px;
+            margin-bottom: 24px;
         }
         .stat-box {
             text-align: center;
             margin: 15px 0;
-            padding: 10px;
-            background: white;
-            border-radius: 5px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 12px;
+            background: #ffffff;
+            border-radius: 6px;
+            border: 0.1px solid #d1d5db;
         }
         .stat-number {
             font-size: 24px;
-            color: #007bff;
+            color: #003da7;
             font-weight: bold;
         }
         .stat-label {
             font-size: 14px;
-            color: #6c757d;
+            color: #6b7280;
         }
         .highlight-box {
-            background: #e8f4ff;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 15px 0;
+            background: #e3f2fd;
+            padding: 24px;
+            border-radius: 6px;
+            margin-bottom: 24px;
+            border: 0.1px solid #d1d5db;
         }
     </style>
 </head>
-<body>
-    <h1>Your {{.Period}} Property Statistics</h1>
-    
-    <p>Hello {{.CompanyName}},</p>
-    
-    <p>Here are your property statistics for the past {{if eq .Period "weekly"}}week{{else}}month{{end}}:</p>
-    
-    <div class="stats-container">
-        <div class="stat-box">
-            <div class="stat-number">{{.TotalViews}}</div>
-            <div class="stat-label">Total Views</div>
-        </div>
-        
-        <div class="stat-box">
-            <div class="stat-number">{{.UniqueViews}}</div>
-            <div class="stat-label">Unique Visitors</div>
-        </div>
-
-        <div class="stat-box">
-            <div class="stat-number">{{.LeadCount}}</div>
-            <div class="stat-label">New Leads</div>
-        </div>
+<body style="margin: 0; padding: 0; width: 100%; word-break: break-word; -webkit-font-smoothing: antialiased; background-color: #f8fafc;">
+    <div role="article" aria-roledescription="email" aria-label="Your Property Statistics" lang="en">
+        <table style="width: 100%; font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;" cellpadding="0" cellspacing="0" role="presentation">
+            <tr>
+                <td align="center" style="padding: 48px 16px; background-color: #f8fafc;">
+                    <table style="width: 600px;" cellpadding="0" cellspacing="0" role="presentation">
+                        <tr>
+                            <td style="padding-bottom: 32px; text-align: center;">
+                                <img src="https://cdn.estapage.com/estapage-logo.svg" width="172" height="37" alt="EstaPage" style="border: 0; max-width: 100%; vertical-align: middle;">
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="background-color: #ffffff; padding: 40px; border-radius: 6px; border: 0.1px solid #d1d5db;">
+                                <h1 style="margin-bottom: 24px; font-size: 24px; line-height: 36px; color: #111827;">Your {{.Period}} Property Statistics</h1>
+                                <p style="margin-bottom: 16px; font-size: 16px; color: #1f2937;">
+                                    Hello {{.CompanyName}},
+                                </p>
+                                <p style="margin-bottom: 24px; font-size: 16px; color: #1f2937;">
+                                    Here are your property statistics for the past {{if eq .Period "weekly"}}week{{else}}month{{end}}:
+                                </p>
+                                
+                                <div class="stats-container">
+                                    <div class="stat-box">
+                                        <div class="stat-number">{{.TotalViews}}</div>
+                                        <div class="stat-label">Total Views</div>
+                                    </div>
+                                    <div class="stat-box">
+                                        <div class="stat-number">{{.UniqueViews}}</div>
+                                        <div class="stat-label">Unique Visitors</div>
+                                    </div>
+                                    <div class="stat-box">
+                                        <div class="stat-number">{{.LeadCount}}</div>
+                                        <div class="stat-label">New Leads</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="highlight-box">
+                                    <h3 style="margin-bottom: 16px; font-size: 18px; font-weight: 600;">Top Performing Property</h3>
+                                    <p style="margin-bottom: 8px; font-size: 16px; color: #1f2937;">
+                                        <strong>{{.TopProperty}}</strong>
+                                    </p>
+                                    <p style="margin: 0; font-size: 16px; color: #1f2937;">
+                                        Received {{.TopPropertyViews}} views
+                                    </p>
+                                </div>
+                                
+                                <p style="margin-bottom: 16px; font-size: 16px; color: #1f2937;">
+                                    Tips to increase your property views:
+                                </p>
+                                <ul style="margin-bottom: 24px; padding-left: 20px; font-size: 16px; color: #1f2937;">
+                                    <li>Add high-quality photos</li>
+                                    <li>Keep your listings up to date</li>
+                                    <li>Share your properties on social media</li>
+                                    <li>Complete all property details</li>
+                                </ul>
+                                
+                                <p style="margin-top: 32px; font-size: 16px; color: #1f2937;">
+                                    Best regards,<br>The EstaPage Team
+                                </p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding-top: 24px; text-align: center;">
+                                <p style="font-size: 14px; color: #6b7280;">
+                                    © 2024 EstaPage. All rights reserved.
+                                </p>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
     </div>
-
-    <div class="highlight-box">
-        <h3>Top Performing Property</h3>
-        <p><strong>{{.TopProperty}}</strong></p>
-        <p>Received {{.TopPropertyViews}} views</p>
-    </div>
-
-    <p>Tips to increase your property views:</p>
-    <ul>
-        <li>Add high-quality photos</li>
-        <li>Keep your listings up to date</li>
-        <li>Share your properties on social media</li>
-        <li>Complete all property details</li>
-    </ul>
-
-    <p>Best regards,<br>The EstePage Team</p>
 </body>
 </html>

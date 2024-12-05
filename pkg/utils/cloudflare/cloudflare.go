@@ -3,19 +3,35 @@ package cloudflare
 import (
 	"context"
 	"fmt"
+	"log"
 	"mime/multipart"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"estepage_backend/internal/model"
+	"estepage_backend/pkg/database"
+	"estepage_backend/pkg/utils/jwt"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/gosimple/slug"
 )
+
+// Utility functions
+func getObjectKeyFromURL(url string) string {
+	return strings.TrimPrefix(url, "https://cdn.estapage.com/")
+}
+
+func GetFileNameFromURL(url string) string {
+	parts := strings.Split(url, "/")
+	return parts[len(parts)-1]
+}
 
 func getS3Client() (*s3.Client, error) {
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
@@ -38,6 +54,7 @@ func getS3Client() (*s3.Client, error) {
 	return client, nil
 }
 
+// Types
 type UploadImageConfig struct {
 	File         *multipart.FileHeader
 	Username     string
@@ -49,18 +66,41 @@ type UploadResult struct {
 	CloudflareID string
 }
 
-func UploadImage(config UploadImageConfig) (UploadResult, error) {
+type UploadAvatarConfig struct {
+	File     *multipart.FileHeader
+	Username string
+}
 
-	// Klasör isimlerini URL-safe hale getir
+// Core functions
+func DeleteImage(fullURL string) error {
+	objectKey := getObjectKeyFromURL(fullURL)
+
+	client, err := getS3Client()
+	if err != nil {
+		return err
+	}
+
+	input := &s3.DeleteObjectInput{
+		Bucket: aws.String(os.Getenv("R2_BUCKET_NAME")),
+		Key:    aws.String(objectKey),
+	}
+
+	_, err = client.DeleteObject(context.TODO(), input)
+	if err != nil {
+		return fmt.Errorf("could not delete file from R2: %v", err)
+	}
+
+	return nil
+}
+
+func UploadImage(config UploadImageConfig) (UploadResult, error) {
 	safeUsername := slug.Make(config.Username)
 	safePropertySlug := slug.Make(config.PropertySlug)
 
-	// Unique dosya adı oluştur
 	ext := filepath.Ext(config.File.Filename)
 	uniqueID := fmt.Sprintf("%d-%s", time.Now().UnixNano(), uuid.New().String())
 	uniqueFilename := uniqueID + ext
 
-	// Organize edilmiş ve URL-safe path yapısı
 	objectKey := filepath.Join("users", safeUsername, "properties", safePropertySlug, "images", uniqueFilename)
 
 	client, err := getS3Client()
@@ -91,36 +131,94 @@ func UploadImage(config UploadImageConfig) (UploadResult, error) {
 	}, nil
 }
 
-func DeleteImage(fullURL string) error {
-	// URL'den object key'i çıkar
-	objectKey := getObjectKeyFromURL(fullURL)
+func UploadAvatar(config UploadAvatarConfig) (string, error) {
+	ext := filepath.Ext(config.File.Filename)
+	uniqueID := fmt.Sprintf("%d-%s", time.Now().UnixNano(), uuid.New().String())
+	uniqueFilename := uniqueID + ext
+
+	objectKey := filepath.Join("users", config.Username, "profile", uniqueFilename)
 
 	client, err := getS3Client()
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	input := &s3.DeleteObjectInput{
+	src, err := config.File.Open()
+	if err != nil {
+		return "", fmt.Errorf("could not open file: %v", err)
+	}
+	defer src.Close()
+
+	input := &s3.PutObjectInput{
 		Bucket: aws.String(os.Getenv("R2_BUCKET_NAME")),
 		Key:    aws.String(objectKey),
+		Body:   src,
 	}
 
-	_, err = client.DeleteObject(context.TODO(), input)
+	_, err = client.PutObject(context.TODO(), input)
 	if err != nil {
-		return fmt.Errorf("could not delete file from R2: %v", err)
+		return "", fmt.Errorf("could not upload avatar to R2: %v", err)
 	}
 
-	return nil
+	return fmt.Sprintf("https://cdn.estapage.com/%s", objectKey), nil
 }
 
-// GetFileNameFromURL sadece dosya adını döndürür
-func GetFileNameFromURL(url string) string {
-	parts := strings.Split(url, "/")
-	return parts[len(parts)-1]
-}
+func UploadAvatarHandler(c *fiber.Ctx) error {
+	claims := c.Locals("user").(*jwt.Claims)
 
-// getObjectKeyFromURL tam object key'i döndürür (users/username/properties/slug/images/filename)
-func getObjectKeyFromURL(url string) string {
-	// https://cdn.estapage.com/ kısmını kaldır
-	return strings.TrimPrefix(url, "https://cdn.estapage.com/")
+	var user model.User
+	if err := database.GetDB().First(&user, claims.UserID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "User not found",
+		})
+	}
+
+	file, err := c.FormFile("avatar")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "No avatar image provided",
+		})
+	}
+
+	contentType := file.Header.Get("Content-Type")
+	if !strings.HasPrefix(contentType, "image/") {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "File must be an image",
+		})
+	}
+
+	if file.Size > 5*1024*1024 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "File size must be less than 5MB",
+		})
+	}
+
+	if user.Avatar != "" {
+		if err := DeleteImage(user.Avatar); err != nil {
+			log.Printf("Error deleting old avatar: %v", err)
+		}
+	}
+
+	config := UploadAvatarConfig{
+		File:     file,
+		Username: user.Username,
+	}
+
+	avatarURL, err := UploadAvatar(config)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Could not upload avatar: %v", err),
+		})
+	}
+
+	if err := database.GetDB().Model(&user).Update("avatar", avatarURL).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Could not update avatar in database",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "Avatar uploaded successfully",
+		"avatar":  avatarURL,
+	})
 }

@@ -16,6 +16,7 @@ import (
 	"estepage_backend/pkg/database"
 	"estepage_backend/pkg/email"
 	"estepage_backend/pkg/seed"
+	"estepage_backend/pkg/utils/cloudflare"
 	"estepage_backend/pkg/utils/location"
 )
 
@@ -73,6 +74,7 @@ func setupRoutes(app *fiber.App) {
 	settings := api.Group("/settings", middleware.AuthMiddleware())
 	settings.Get("/profile", controller.GetProfile)
 	settings.Put("/profile", controller.UpdateProfile)
+	settings.Post("/avatar", cloudflare.UploadAvatarHandler)
 
 	// Protected lead routes
 	leads := protected.Group("/leads")
