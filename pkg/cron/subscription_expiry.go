@@ -36,7 +36,6 @@ func checkExpiringSubscriptions() {
 
 		err := database.DB.Where("DATE(expires_at) = ? AND status = ?", targetDate, "active").
 			Preload("User").
-			Preload("Subscription").
 			Find(&subs).Error
 
 		if err != nil {
@@ -54,10 +53,13 @@ func checkExpiringSubscriptions() {
 					continue
 				}
 
+				// StripePlanID'den plan adını belirle
+				planName := getPlanNameFromStripePlanID(sub.StripePlanID)
+
 				err = email.GlobalEmailService.SendSubscriptionExpiryWarning(
 					sub.User.Email,
 					sub.User.CompanyName,
-					sub.Subscription.Name,
+					planName,
 					expiresAt,
 					days,
 				)
@@ -68,5 +70,16 @@ func checkExpiringSubscriptions() {
 				}
 			}
 		}
+	}
+}
+
+func getPlanNameFromStripePlanID(stripePlanID string) string {
+	switch stripePlanID {
+	case "price_1QT3IEJuNU9LluRUWytR6JS5":
+		return "Pro"
+	case "price_1QT3IaJuNU9LluRUg21Cv7QU":
+		return "Elite"
+	default:
+		return "Free"
 	}
 }

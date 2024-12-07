@@ -15,7 +15,7 @@ import (
 	"estepage_backend/pkg/cron"
 	"estepage_backend/pkg/database"
 	"estepage_backend/pkg/email"
-	"estepage_backend/pkg/seed"
+	"estepage_backend/pkg/subscription"
 	"estepage_backend/pkg/utils/cloudflare"
 	"estepage_backend/pkg/utils/location"
 )
@@ -32,45 +32,41 @@ func setupRoutes(app *fiber.App) {
 
 	// Public Properties Routes
 	publicProps := api.Group("/p")
-	publicProps.Get("/:username", controller.ListUserProperties)               // Kullanıcının tüm ilanları
-	publicProps.Get("/:username/:property_slug", controller.GetPropertyBySlug) // İlan detayı
-	// Public routes
-	api.Post("/properties/:property_id/leads", controller.CreateLead) // Bu route korumasız olmalı
+	publicProps.Get("/:username", controller.ListUserProperties)
+	publicProps.Get("/:username/:property_slug", controller.GetPropertyBySlug)
 
-	// Public Newsletter Routes Abone ol
+	// Public Newsletter Routes (with subscription check)
 	publicNewsletter := api.Group("/newsletter")
-	publicNewsletter.Post("/subscribe", controller.AddSubscriber) // Abone olma (public)
+	publicNewsletter.Post("/subscribe", middleware.CheckFeatureAccess(subscription.NewsletterForm), controller.AddSubscriber)
 
-	// Protected Newsletter Routes Listele
+	// Protected Newsletter Routes
 	protectedNewsletter := api.Group("/newsletter", middleware.AuthMiddleware())
-	protectedNewsletter.Get("/subscribers", controller.GetSubscribers) // Aboneleri listeleme (protected)
+	protectedNewsletter.Get("/subscribers", controller.GetSubscribers)
 
-	// Protected Routes (Authentication gerekir)
+	// Protected Routes
 	protected := api.Group("/", middleware.AuthMiddleware())
 	protected.Get("/me", controller.GetMe)
 
-	// Protected Property Routes
+	// Protected Property Routes with subscription checks
 	properties := protected.Group("/properties")
-	properties.Get("/my", controller.ListMyProperties)   // Kendi ilanlarım
-	properties.Post("/", controller.CreateProperty)      // İlan oluştur
-	properties.Put("/:id", controller.UpdateProperty)    // İlan güncelle
-	properties.Delete("/:id", controller.DeleteProperty) // İlan sil
+	properties.Get("/my", controller.ListMyProperties)
+	properties.Post("/", middleware.CheckSubscriptionLimit(), controller.CreateProperty)
+	properties.Put("/:id", middleware.CheckPropertyOwnership(), controller.UpdateProperty)
+	properties.Delete("/:id", middleware.CheckPropertyOwnership(), controller.DeleteProperty)
+	properties.Post("/:property_id/images", middleware.CheckImageLimit(), controller.UploadPropertyImage)
+	properties.Delete("/images/:image_id", middleware.CheckPropertyOwnership(), controller.DeletePropertyImage)
 
-	// Image upload routes aynı group altında
-	properties.Post("/:property_id/images", controller.UploadPropertyImage)
-	properties.Delete("/images/:image_id", controller.DeletePropertyImage)
+	// Lead form with subscription check
+	api.Post("/properties/:property_id/leads", middleware.CheckFeatureAccess(subscription.LeadForm), controller.CreateLead)
 
-	// Upload routes
-	properties.Post("/:id/images", controller.UploadPropertyImage)
-
-	// Dashboard routes (Protected)
+	// Dashboard routes
 	dashboard := api.Group("/dashboard", middleware.AuthMiddleware())
 	dashboard.Get("/stats", controller.GetDashboardStats)
 
 	// Property view recording
 	api.Post("/properties/:id/view", controller.RecordPropertyView)
 
-	// Settings routes (Protected)
+	// Settings routes
 	settings := api.Group("/settings", middleware.AuthMiddleware())
 	settings.Get("/profile", controller.GetProfile)
 	settings.Put("/profile", controller.UpdateProfile)
@@ -87,6 +83,17 @@ func setupRoutes(app *fiber.App) {
 	api.Get("/locations/states/:countryCode", controller.GetStatesByCountry)
 	api.Get("/locations/cities/:stateCode", controller.GetCitiesByState)
 
+	// Subscription routes
+	subscriptions := api.Group("/subscriptions")
+	subscriptions.Get("/plans", controller.ListPlans)
+
+	subProtected := subscriptions.Use(middleware.AuthMiddleware())
+	subProtected.Post("/create-checkout-session", controller.CreateCheckoutSession)
+	subProtected.Post("/cancel", controller.CancelSubscription)
+	subProtected.Get("/my", controller.GetMySubscription)
+
+	// Stripe webhook
+	api.Post("/webhook", controller.HandleStripeWebhook)
 }
 
 func main() {
@@ -94,13 +101,11 @@ func main() {
 		log.Fatal("Error loading .env file")
 	}
 
-	// Initialize email service globally
 	if err := email.InitEmailService(os.Getenv("RESEND_API_KEY")); err != nil {
 		log.Fatal("Could not initialize email service:", err)
 	}
 	log.Printf("Email service initialized with API key: %s", os.Getenv("RESEND_API_KEY"))
 
-	// Init controllers and crons without passing email service
 	controller.InitAuthController()
 	controller.InitLeadController()
 	cron.InitNewsletterCron()
@@ -111,15 +116,13 @@ func main() {
 		log.Fatal("Could not initialize location data:", err)
 	}
 
-	// Database connection
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
 		log.Fatal("DATABASE_URL is not set in .env")
 	}
 
 	database.InitDB(dbURL)
-	var err error
-	err = database.MigrateDatabase(
+	err := database.MigrateDatabase(
 		&model.User{},
 		&model.Subscription{},
 		&model.UserSubscription{},
@@ -133,8 +136,6 @@ func main() {
 	if err != nil {
 		log.Printf("Migration warning: %v", err)
 	}
-
-	seed.SeedSubscriptionPlans(database.GetDB())
 
 	app := fiber.New(fiber.Config{
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
