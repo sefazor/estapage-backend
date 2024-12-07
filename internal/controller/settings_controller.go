@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"estepage_backend/internal/model"
 	"estepage_backend/pkg/database"
+	"estepage_backend/pkg/email"
 	"estepage_backend/pkg/utils/cloudflare"
 	"estepage_backend/pkg/utils/jwt"
 	"fmt"
@@ -32,6 +33,12 @@ type ProfileUpdateInput struct {
 	SoldScore      int               `json:"sold_score"`
 	Rating         float64           `json:"rating"`
 	SocialLinks    map[string]string `json:"social_links"`
+}
+
+type ChangePasswordInput struct {
+	CurrentPassword    string `json:"current_password" validate:"required"`
+	NewPassword        string `json:"new_password" validate:"required,min=6"`
+	NewPasswordConfirm string `json:"new_password_confirm" validate:"required,eqfield=NewPassword"`
 }
 
 func UpdateProfile(c *fiber.Ctx) error {
@@ -165,5 +172,55 @@ func UploadAvatar(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"message": "Avatar uploaded successfully",
 		"avatar":  avatarURL,
+	})
+}
+func ChangePassword(c *fiber.Ctx) error {
+	claims := c.Locals("user").(*jwt.Claims)
+	input := new(ChangePasswordInput)
+
+	if err := c.BodyParser(input); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid input",
+		})
+	}
+
+	var user model.User
+	if err := database.DB.First(&user, claims.UserID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "User not found",
+		})
+	}
+
+	// Mevcut şifreyi kontrol et
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.CurrentPassword)); err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Current password is incorrect",
+		})
+	}
+
+	// Yeni şifreyi hashle
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Could not hash new password",
+		})
+	}
+
+	// Şifreyi güncelle
+	if err := database.DB.Model(&user).Update("password", string(hashedPassword)).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Could not update password",
+		})
+	}
+
+	// Email gönder
+	if email.GlobalEmailService != nil {
+		err := email.GlobalEmailService.SendPasswordChangedEmail(user.Email)
+		if err != nil {
+			log.Printf("Error sending password changed email: %v", err)
+		}
+	}
+	return c.JSON(fiber.Map{
+		"message": "Password changed successfully",
 	})
 }

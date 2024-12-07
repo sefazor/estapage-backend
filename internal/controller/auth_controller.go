@@ -13,7 +13,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
 type RegisterInput struct {
@@ -149,25 +148,14 @@ func GetMe(c *fiber.Ctx) error {
 	claims := c.Locals("user").(*jwt.Claims)
 
 	var user model.User
-	if err := database.GetDB().First(&user, claims.UserID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error": "User not found",
-			})
-		}
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Could not fetch user",
+	if err := database.DB.First(&user, claims.UserID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "User not found",
 		})
 	}
 
 	return c.JSON(fiber.Map{
-		"user": fiber.Map{
-			"id":           user.ID,
-			"email":        user.Email,
-			"username":     user.Username,
-			"company_name": user.CompanyName,
-			"created_at":   user.CreatedAt,
-		},
+		"user": user.GetPublicProfile(),
 	})
 }
 

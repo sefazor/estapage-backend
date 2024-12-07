@@ -71,6 +71,7 @@ func setupRoutes(app *fiber.App) {
 	settings.Get("/profile", controller.GetProfile)
 	settings.Put("/profile", controller.UpdateProfile)
 	settings.Post("/avatar", cloudflare.UploadAvatarHandler)
+	settings.Post("/change-password", controller.ChangePassword)
 
 	// Protected lead routes
 	leads := protected.Group("/leads")

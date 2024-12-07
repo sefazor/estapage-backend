@@ -84,3 +84,42 @@ func DeterminePlanType(stripePlanID string) PlanType {
 		return FreePlan
 	}
 }
+
+// GetPlanMaxListings direkt plan tipinden maksimum listing sayısını döndürür
+func GetPlanMaxListings(planType PlanType) int {
+	return PlanFeatures[planType].MaxListings
+}
+
+// GetPlanMaxImages direkt plan tipinden maksimum resim sayısını döndürür
+func GetPlanMaxImages(planType PlanType) int {
+	return PlanFeatures[planType].MaxImagesPerList
+}
+
+// GetPlanNameFromStripeID stripe plan ID'sinden insan tarafından okunabilir plan adını döndürür
+func GetPlanNameFromStripeID(stripePlanID string) string {
+	planType := DeterminePlanType(stripePlanID)
+	switch planType {
+	case ProPlan:
+		return "Pro Plan"
+	case ElitePlan:
+		return "Elite Plan"
+	default:
+		return "Free Plan"
+	}
+}
+
+// CalculateRemainingListings kalan listing sayısını hesaplar
+func CalculateRemainingListings(planType PlanType, currentListings int) int {
+	maxListings := GetPlanMaxListings(planType)
+	return maxListings - currentListings
+}
+
+// IsPlanFeatureEnabled plan tipine göre bir özelliğin aktif olup olmadığını kontrol eder
+func IsPlanFeatureEnabled(planType PlanType, feature Feature) bool {
+	if limits, exists := PlanFeatures[planType]; exists {
+		if enabled, ok := limits.AllowedFeatures[feature]; ok {
+			return enabled
+		}
+	}
+	return false
+}
