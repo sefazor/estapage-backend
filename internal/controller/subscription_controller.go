@@ -16,7 +16,6 @@ import (
 
 	"estepage_backend/internal/model"
 	"estepage_backend/pkg/database"
-	"estepage_backend/pkg/email"
 	"estepage_backend/pkg/utils/jwt"
 )
 
@@ -61,8 +60,9 @@ func CreateCheckoutSession(c *fiber.Ctx) error {
 				Quantity: stripe.Int64(1),
 			},
 		},
-		SuccessURL:        stripe.String(os.Getenv("FRONTEND_URL") + "/payment/success?session_id={CHECKOUT_SESSION_ID}"),
-		CancelURL:         stripe.String(os.Getenv("FRONTEND_URL") + "/payment/cancel"),
+		// Test için backend URL'lerini kullan
+		SuccessURL:        stripe.String("http://localhost:3000/api/subscriptions/payment-success"),
+		CancelURL:         stripe.String("http://localhost:3000/api/subscriptions/payment-cancelled"),
 		CustomerEmail:     stripe.String(user.Email),
 		ClientReferenceID: stripe.String(fmt.Sprintf("%d", user.ID)),
 	}
@@ -124,25 +124,32 @@ func GetMySubscription(c *fiber.Ctx) error {
 }
 
 func HandleStripeWebhook(c *fiber.Ctx) error {
+	// Bu webhook secret'ı stripe listen komutunun verdiği secret olmalı
 	webhookSecret := os.Getenv("STRIPE_WEBHOOK_SECRET")
 	payload := c.Body()
 	signatureHeader := c.Get("Stripe-Signature")
 
 	event, err := webhook.ConstructEvent(payload, signatureHeader, webhookSecret)
 	if err != nil {
+		log.Printf("Webhook Error: %v", err)
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid webhook signature",
 		})
 	}
 
-	log.Printf("Processing Stripe webhook event: %s", event.Type)
+	log.Printf("Handling webhook event: %s", event.Type)
 
 	switch event.Type {
 	case "checkout.session.completed":
 		var s stripe.CheckoutSession
 		if err := json.Unmarshal(event.Data.Raw, &s); err != nil {
+			log.Printf("Error parsing webhook JSON: %v", err)
 			return c.Status(fiber.StatusBadRequest).Send(nil)
 		}
+
+		// Debug bilgisi ekleyelim
+		log.Printf("Processing checkout session: %s", s.ID)
+		log.Printf("Customer reference ID: %s", s.ClientReferenceID)
 
 		userID, _ := strconv.ParseUint(s.ClientReferenceID, 10, 32)
 
@@ -159,26 +166,23 @@ func HandleStripeWebhook(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusInternalServerError).Send(nil)
 		}
 
-		// Email notification
-		var user model.User
-		if err := database.DB.First(&user, userID).Error; err == nil && email.GlobalEmailService != nil {
-			expiresAt, _ := time.Parse(time.RFC3339, subscription.ExpiresAt)
-			err := email.GlobalEmailService.SendSubscriptionStartedEmail(
-				user.Email,
-				user.CompanyName,
-				"Your Plan", // Get plan name from Stripe
-				30,          // Standard duration
-				0,           // Get price from Stripe
-				"USD",
-				0, // Get max listings from plan
-				expiresAt,
-				false,
-			)
-			if err != nil {
-				log.Printf("Could not send subscription email: %v", err)
-			}
-		}
+		log.Printf("Successfully created subscription for user %d", userID)
 	}
 
 	return c.SendStatus(fiber.StatusOK)
+}
+
+// Success ve Cancel handler'ları
+func HandleSubscriptionSuccess(c *fiber.Ctx) error {
+	return c.JSON(fiber.Map{
+		"message": "Subscription successful",
+		"status":  "success",
+	})
+}
+
+func HandleSubscriptionCancel(c *fiber.Ctx) error {
+	return c.JSON(fiber.Map{
+		"message": "Subscription cancelled",
+		"status":  "cancelled",
+	})
 }

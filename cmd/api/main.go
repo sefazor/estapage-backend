@@ -89,8 +89,12 @@ func setupRoutes(app *fiber.App) {
 
 	subProtected := subscriptions.Use(middleware.AuthMiddleware())
 	subProtected.Post("/create-checkout-session", controller.CreateCheckoutSession)
-	subProtected.Post("/cancel", controller.CancelSubscription)
+	subProtected.Post("/cancel-subscription", controller.CancelSubscription) // Aktif abonelik iptali
 	subProtected.Get("/my", controller.GetMySubscription)
+
+	// Stripe checkout süreç sonuçları
+	subscriptions.Get("/payment-success", controller.HandleSubscriptionSuccess)  // Ödeme başarılı
+	subscriptions.Get("/payment-cancelled", controller.HandleSubscriptionCancel) // Ödemeden vazgeçildi
 
 	// Stripe webhook
 	api.Post("/webhook", controller.HandleStripeWebhook)
