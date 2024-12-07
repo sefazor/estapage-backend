@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -33,6 +34,9 @@ type User struct {
 	TotalClients uint    `json:"total_clients"`
 	SoldScore    int     `json:"sold_score"`
 	Rating       float64 `json:"rating"`
+
+	// Social Media
+	SocialLinks datatypes.JSON `json:"social_links"`
 
 	// Sistem bilgileri
 	IsVerified     bool  `json:"is_verified" gorm:"default:false"`
@@ -68,5 +72,6 @@ func (u *User) GetPublicProfile() map[string]interface{} {
 		"rating":           u.Rating,
 		"total_clients":    u.TotalClients,
 		"is_verified":      u.IsVerified,
+		"social_links":     u.SocialLinks,
 	}
 }

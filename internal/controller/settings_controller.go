@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"encoding/json"
 	"estepage_backend/internal/model"
 	"estepage_backend/pkg/database"
 	"estepage_backend/pkg/utils/cloudflare"
@@ -10,21 +11,27 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/datatypes"
 )
 
 type ProfileUpdateInput struct {
-	FirstName      string `json:"first_name"`
-	LastName       string `json:"last_name"`
-	Title          string `json:"title"`
-	PhoneNumber    string `json:"phone_number"`
-	BusinessEmail  string `json:"business_email"`
-	WhatsAppNumber string `json:"whats_app_number"`
-	// Avatar field'ı kaldırıldı
-	AboutMe      string  `json:"about_me"`
-	Experience   int     `json:"experience"`
-	TotalClients uint    `json:"total_clients"`
-	SoldScore    int     `json:"sold_score"`
-	Rating       float64 `json:"rating"`
+	Email          string            `json:"email"`
+	Password       string            `json:"password"`
+	Username       string            `json:"username"`
+	CompanyName    string            `json:"company_name"`
+	FirstName      string            `json:"first_name"`
+	LastName       string            `json:"last_name"`
+	Title          string            `json:"title"`
+	PhoneNumber    string            `json:"phone_number"`
+	BusinessEmail  string            `json:"business_email"`
+	WhatsAppNumber string            `json:"whats_app_number"`
+	AboutMe        string            `json:"about_me"`
+	Experience     int               `json:"experience"`
+	TotalClients   uint              `json:"total_clients"`
+	SoldScore      int               `json:"sold_score"`
+	Rating         float64           `json:"rating"`
+	SocialLinks    map[string]string `json:"social_links"`
 }
 
 func UpdateProfile(c *fiber.Ctx) error {
@@ -38,28 +45,52 @@ func UpdateProfile(c *fiber.Ctx) error {
 	}
 
 	var user model.User
-	if err := database.GetDB().First(&user, claims.UserID).Error; err != nil {
+	if err := database.DB.First(&user, claims.UserID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "User not found",
 		})
 	}
 
+	// Hash password if provided
+	if input.Password != "" {
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Could not hash password",
+			})
+		}
+		user.Password = string(hashedPassword)
+	}
+
 	updates := map[string]interface{}{
+		"email":            input.Email,
+		"username":         input.Username,
+		"company_name":     input.CompanyName,
 		"first_name":       input.FirstName,
 		"last_name":        input.LastName,
 		"title":            input.Title,
 		"phone_number":     input.PhoneNumber,
 		"business_email":   input.BusinessEmail,
 		"whats_app_number": input.WhatsAppNumber,
-		// Avatar güncelleme kaldırıldı
-		"experience":    input.Experience,
-		"total_clients": input.TotalClients,
-		"sold_score":    input.SoldScore,
-		"rating":        input.Rating,
-		"about_me":      input.AboutMe,
+		"experience":       input.Experience,
+		"total_clients":    input.TotalClients,
+		"sold_score":       input.SoldScore,
+		"rating":           input.Rating,
+		"about_me":         input.AboutMe,
 	}
 
-	if err := database.GetDB().Model(&user).Updates(updates).Error; err != nil {
+	// Process social links if provided
+	if len(input.SocialLinks) > 0 {
+		socialLinksJSON, err := json.Marshal(input.SocialLinks)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Could not process social links",
+			})
+		}
+		updates["social_links"] = datatypes.JSON(socialLinksJSON)
+	}
+
+	if err := database.DB.Model(&user).Updates(updates).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Could not update profile",
 		})
@@ -87,7 +118,6 @@ func GetProfile(c *fiber.Ctx) error {
 func UploadAvatar(c *fiber.Ctx) error {
 	claims := c.Locals("user").(*jwt.Claims)
 
-	// Kullanıcı bilgilerini al
 	var user model.User
 	if err := database.GetDB().First(&user, claims.UserID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -95,7 +125,6 @@ func UploadAvatar(c *fiber.Ctx) error {
 		})
 	}
 
-	// Dosya kontrolü
 	file, err := c.FormFile("avatar")
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -103,22 +132,18 @@ func UploadAvatar(c *fiber.Ctx) error {
 		})
 	}
 
-	// Dosya tipi kontrolü
 	if !strings.HasPrefix(file.Header.Get("Content-Type"), "image/") {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "File must be an image",
 		})
 	}
 
-	// Eğer eski avatar varsa, sil
 	if user.Avatar != "" {
 		if err := cloudflare.DeleteImage(user.Avatar); err != nil {
-			// Hata logla ama işleme devam et
 			log.Printf("Error deleting old avatar: %v", err)
 		}
 	}
 
-	// Yeni avatar'ı yükle
 	config := cloudflare.UploadAvatarConfig{
 		File:     file,
 		Username: user.Username,
@@ -131,7 +156,6 @@ func UploadAvatar(c *fiber.Ctx) error {
 		})
 	}
 
-	// Veritabanını güncelle
 	if err := database.GetDB().Model(&user).Update("avatar", avatarURL).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Could not update avatar",
