@@ -274,10 +274,7 @@ func ListUserProperties(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"user": fiber.Map{
-			"username":     user.Username,
-			"company_name": user.CompanyName,
-		},
+		"user": user.GetPublicProfile(),
 		"properties": properties,
 	})
 }
