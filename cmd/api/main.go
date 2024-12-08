@@ -41,6 +41,7 @@ func setupRoutes(app *fiber.App) {
 	// Protected newsletter routes (emlakçı kendi abonelerini görüntüler)
 	protectedNewsletter := api.Group("/newsletter", middleware.AuthMiddleware())
 	protectedNewsletter.Get("/subscribers", controller.GetMySubscribers)
+	protectedNewsletter.Get("/stats", controller.GetNewsletterStats) // Yeni endpoint
 
 	// Protected Routes
 	protected := api.Group("/", middleware.AuthMiddleware())
@@ -135,7 +136,7 @@ func main() {
 		&model.PropertyView{},
 		&model.PropertyStats{},
 		&model.Lead{},
-		&model.Subscriber{},
+		&model.NewsletterSubscriber{},
 	)
 	if err != nil {
 		log.Printf("Migration warning: %v", err)

@@ -12,7 +12,9 @@ import (
 func InitNewsletterCron() {
 	c := cron.New()
 
-	_, err := c.AddFunc("0 19 * * *", func() {
+	// Her 2 dakikada bir çalışacak şekilde ayarlayalım (test için)
+	_, err := c.AddFunc("*/2 * * * *", func() {
+		log.Printf("Running newsletter stats check at: %v", time.Now())
 		sendDailyNewsletterStats()
 	})
 
@@ -22,7 +24,10 @@ func InitNewsletterCron() {
 	}
 
 	c.Start()
+	log.Println("Newsletter cron job initialized successfully")
 }
+
+// pkg/cron/newsletter_stats.go
 
 func sendDailyNewsletterStats() {
 	today := time.Now().Format("2006-01-02")
@@ -41,7 +46,7 @@ func sendDailyNewsletterStats() {
             u.company_name,
             COUNT(s.id) as subscriber_count
         FROM users u
-        LEFT JOIN subscribers s ON u.id = s.user_id
+        LEFT JOIN newsletter_subscribers s ON u.id = s.user_id
         WHERE DATE(s.subscribed_at) = ?
         GROUP BY u.id
         HAVING COUNT(s.id) > 0
