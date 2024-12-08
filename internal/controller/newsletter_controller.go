@@ -3,75 +3,89 @@ package controller
 import (
 	"estepage_backend/internal/model"
 	"estepage_backend/pkg/database"
-
+	"estepage_backend/pkg/utils/jwt"
 	"net/mail"
+	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 )
 
-type SubscriberInput struct {
-	UserID uint   `json:"user_id"`
-	Email  string `json:"email"`
+type NewsletterSubscriptionInput struct {
+	Email string `json:"email" validate:"required,email"`
 }
 
-func AddSubscriber(c *fiber.Ctx) error {
-	var input SubscriberInput
+// PublicSubscribe emlakçının sayfasından bültene abone olma
+func PublicSubscribe(c *fiber.Ctx) error {
+	// URL'den emlakçı ID'sini al
+	userIDStr := c.Params("user_id")
+	if userIDStr == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Agent ID is required",
+		})
+	}
 
-	// Gelen veriyi parse et
+	// String'i uint'e çevir
+	userID, err := strconv.ParseUint(userIDStr, 10, 64)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid agent ID format",
+		})
+	}
+
+	// Input kontrolü
+	var input NewsletterSubscriptionInput
 	if err := c.BodyParser(&input); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid input format"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid input format",
+		})
 	}
 
-	// E-posta formatını kontrol et
+	// Email formatı kontrolü
 	if _, err := mail.ParseAddress(input.Email); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid email format"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid email format",
+		})
 	}
 
-	// Aynı e-posta için daha önce abone kaydı yapılmış mı kontrol et
+	// Aynı email için kontrol
 	var existingSubscriber model.Subscriber
-	if err := database.GetDB().Where("user_id = ? AND email = ?", input.UserID, input.Email).First(&existingSubscriber).Error; err == nil {
-		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Subscriber already exists"})
+	if err := database.GetDB().Where("user_id = ? AND email = ?", userID, input.Email).
+		First(&existingSubscriber).Error; err == nil {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+			"error": "Already subscribed to this agent's newsletter",
+		})
 	}
 
-	// Yeni aboneyi kaydet
+	// Yeni abone kaydı
 	subscriber := model.Subscriber{
-		UserID: input.UserID,
+		UserID: uint(userID),
 		Email:  input.Email,
 	}
 
 	if err := database.GetDB().Create(&subscriber).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save subscriber"})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Could not complete subscription",
+		})
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "Subscriber added successfully"})
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"message": "Successfully subscribed to newsletter",
+	})
 }
 
-func GetSubscribers(c *fiber.Ctx) error {
-	// Kullanıcı ID'sini sorgudan al
-	userID := c.Query("user_id")
-	if userID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "User ID is required",
-		})
-	}
+// GetMySubscribers emlakçının kendi abonelerini görmesi
+func GetMySubscribers(c *fiber.Ctx) error {
+	claims := c.Locals("user").(*jwt.Claims)
 
 	var subscribers []model.Subscriber
-
-	// Veritabanından kullanıcıya ait aboneleri getir
-	err := database.GetDB().Where("user_id = ?", userID).Find(&subscribers).Error
-	if err != nil {
+	if err := database.GetDB().Where("user_id = ?", claims.UserID).Find(&subscribers).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to fetch subscribers",
+			"error": "Could not fetch subscribers",
 		})
 	}
 
-	// Eğer abone yoksa bilgilendirici bir mesaj dön
-	if len(subscribers) == 0 {
-		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"message": "No subscribers found for the given user ID",
-		})
-	}
-
-	// Aboneleri döndür
-	return c.Status(fiber.StatusOK).JSON(subscribers)
+	return c.JSON(fiber.Map{
+		"total_subscribers": len(subscribers),
+		"subscribers":       subscribers,
+	})
 }

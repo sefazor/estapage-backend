@@ -35,13 +35,12 @@ func setupRoutes(app *fiber.App) {
 	publicProps.Get("/:username", controller.ListUserProperties)
 	publicProps.Get("/:username/:property_slug", controller.GetPropertyBySlug)
 
-	// Public Newsletter Routes (with subscription check)
-	publicNewsletter := api.Group("/newsletter")
-	publicNewsletter.Post("/subscribe", middleware.CheckFeatureAccess(subscription.NewsletterForm), controller.AddSubscriber)
+	// Public newsletter subscription
+	api.Post("/agents/:user_id/subscribe", controller.PublicSubscribe)
 
-	// Protected Newsletter Routes
+	// Protected newsletter routes (emlakçı kendi abonelerini görüntüler)
 	protectedNewsletter := api.Group("/newsletter", middleware.AuthMiddleware())
-	protectedNewsletter.Get("/subscribers", controller.GetSubscribers)
+	protectedNewsletter.Get("/subscribers", controller.GetMySubscribers)
 
 	// Protected Routes
 	protected := api.Group("/", middleware.AuthMiddleware())
