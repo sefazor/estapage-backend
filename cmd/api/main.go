@@ -15,7 +15,6 @@ import (
 	"estepage_backend/pkg/cron"
 	"estepage_backend/pkg/database"
 	"estepage_backend/pkg/email"
-	"estepage_backend/pkg/subscription"
 	"estepage_backend/pkg/utils/cloudflare"
 	"estepage_backend/pkg/utils/location"
 )
@@ -29,6 +28,9 @@ func setupRoutes(app *fiber.App) {
 	auth.Post("/login", controller.Login)
 	auth.Post("/request-reset", controller.RequestPasswordReset)
 	auth.Post("/reset-password", controller.ResetPassword)
+
+    api.Post("/properties/:property_id/leads", controller.CreateLead)
+
 
 	// Public Properties Routes
 	publicProps := api.Group("/p")
@@ -56,8 +58,6 @@ func setupRoutes(app *fiber.App) {
 	properties.Post("/:property_id/images", middleware.CheckImageLimit(), controller.UploadPropertyImage)
 	properties.Delete("/images/:image_id", middleware.CheckPropertyOwnership(), controller.DeletePropertyImage)
 
-	// Lead form with subscription check
-	api.Post("/properties/:property_id/leads", middleware.CheckFeatureAccess(subscription.LeadForm), controller.CreateLead)
 
 	// Dashboard routes
 	dashboard := api.Group("/dashboard", middleware.AuthMiddleware())

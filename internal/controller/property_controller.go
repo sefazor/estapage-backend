@@ -102,22 +102,24 @@ func CreateProperty(c *fiber.Ctx) error {
 		})
 	}
 
-	for i, imageURL := range input.Images {
-		if strings.HasPrefix(imageURL, "https://"+os.Getenv("R2_BUCKET_NAME")) {
-			image := model.PropertyImage{
-				PropertyID: property.ID,
-				URL:        imageURL,
-				Order:      i,
-				IsCover:    i == 0,
-			}
-			if err := tx.Create(&image).Error; err != nil {
-				tx.Rollback()
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"error": "Could not save images",
-				})
-			}
-		}
-	}
+	 for i, imageURL := range input.Images {
+            if strings.HasPrefix(imageURL, "https://"+os.Getenv("R2_BUCKET_NAME")) {
+                image := model.PropertyImage{
+                    PropertyID: property.ID,
+                    URL:        imageURL,
+                    Order:      i,
+                    IsCover:    i == 0,
+                    // Size bilgisi upload sırasında cloudflare.UploadPropertyImage
+                    // fonksiyonunda kaydediliyor
+                }
+                if err := tx.Create(&image).Error; err != nil {
+                    tx.Rollback()
+                    return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+                        "error": "Could not save images",
+                    })
+                }
+            }
+        }
 
 	if err := tx.Commit().Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -217,19 +219,19 @@ func UpdateProperty(c *fiber.Ctx) error {
 
 	// Yeni resimleri kaydet
 	for i, imageURL := range input.Images {
-		image := model.PropertyImage{
-			PropertyID: property.ID,
-			URL:        imageURL,
-			Order:      i,
-			IsCover:    i == 0,
-		}
-		if err := tx.Create(&image).Error; err != nil {
-			tx.Rollback()
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Could not save new images",
-			})
-		}
-	}
+            image := model.PropertyImage{
+                PropertyID: property.ID,
+                URL:        imageURL,
+                Order:      i,
+                IsCover:    i == 0,
+            }
+            if err := tx.Create(&image).Error; err != nil {
+                tx.Rollback()
+                return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+                    "error": "Could not save new images",
+                })
+            }
+        }
 
 	if err := tx.Commit().Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{

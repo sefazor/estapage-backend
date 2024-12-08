@@ -10,9 +10,9 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/stripe/stripe-go/v74"
-	"github.com/stripe/stripe-go/v74/billingportal"
+	portalsession "github.com/stripe/stripe-go/v74/billingportal/session"
 	"github.com/stripe/stripe-go/v74/checkout/session"
-	stripeinvoice "github.com/stripe/stripe-go/v74/invoice" // invoice çakışmasını önlemek için alias kullandık
+	stripeinvoice "github.com/stripe/stripe-go/v74/invoice"
 	"github.com/stripe/stripe-go/v74/subscription"
 	"github.com/stripe/stripe-go/v74/webhook"
 
@@ -62,9 +62,8 @@ func CreateCheckoutSession(c *fiber.Ctx) error {
 				Quantity: stripe.Int64(1),
 			},
 		},
-		// Test için backend URL'lerini kullan
-		SuccessURL:        stripe.String("http://localhost:3000/api/subscriptions/payment-success"),
-		CancelURL:         stripe.String("http://localhost:3000/api/subscriptions/payment-cancelled"),
+		SuccessURL:        stripe.String(os.Getenv("FRONTEND_URL") + "/settings/subscription/success"),
+		CancelURL:         stripe.String(os.Getenv("FRONTEND_URL") + "/settings/subscription/cancel"),
 		CustomerEmail:     stripe.String(user.Email),
 		ClientReferenceID: stripe.String(fmt.Sprintf("%d", user.ID)),
 	}
@@ -81,10 +80,36 @@ func CreateCheckoutSession(c *fiber.Ctx) error {
 	})
 }
 
+func GetMySubscription(c *fiber.Ctx) error {
+	claims := c.Locals("user").(*jwt.Claims)
+
+	var userSub model.UserSubscription
+	if err := database.DB.Where("user_id = ? AND status = ?", claims.UserID, "active").First(&userSub).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "No active subscription found",
+		})
+	}
+
+	// Stripe'dan güncel subscription bilgisini al
+	stripeSub, err := subscription.Get(userSub.StripeSubID, nil)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Could not fetch subscription details",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"subscription": userSub,
+		"details": fiber.Map{
+			"current_period_end": time.Unix(stripeSub.CurrentPeriodEnd, 0),
+			"status":             stripeSub.Status,
+		},
+	})
+}
+
 func CancelSubscription(c *fiber.Ctx) error {
 	claims := c.Locals("user").(*jwt.Claims)
 
-	// Aktif aboneliği bul
 	var userSub model.UserSubscription
 	if err := database.DB.Where("user_id = ? AND status = ?", claims.UserID, "active").First(&userSub).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -102,11 +127,11 @@ func CancelSubscription(c *fiber.Ctx) error {
 
 	// İptal parametrelerini ayarla
 	params := &stripe.SubscriptionParams{
-		CancelAtPeriodEnd: stripe.Bool(true), // Dönem sonunda iptal et
+		CancelAtPeriodEnd: stripe.Bool(true),
 	}
 
 	// Stripe'da aboneliği iptal et
-	cancelledSub, err := subscription.Update(userSub.StripeSubID, params)
+	_, err = subscription.Update(userSub.StripeSubID, params)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Could not cancel subscription with Stripe",
@@ -114,7 +139,7 @@ func CancelSubscription(c *fiber.Ctx) error {
 	}
 
 	// Veritabanında durumu güncelle
-	userSub.Status = "cancelling" // dönem sonunda iptal olacak
+	userSub.Status = "cancelling"
 	userSub.CancellationDate = time.Now()
 	if err := database.DB.Save(&userSub).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -126,7 +151,6 @@ func CancelSubscription(c *fiber.Ctx) error {
 	periodEnd := time.Unix(stripeSub.CurrentPeriodEnd, 0)
 	daysRemaining := int(time.Until(periodEnd).Hours() / 24)
 
-	// Detaylı response dön
 	return c.JSON(fiber.Map{
 		"message": "Subscription cancelled successfully",
 		"details": fiber.Map{
@@ -137,30 +161,37 @@ func CancelSubscription(c *fiber.Ctx) error {
 			"plan_access_until": fmt.Sprintf("Plan özelliklerini %s tarihine kadar kullanabilirsiniz",
 				periodEnd.Format("2 January 2006")),
 		},
-		"subscription": fiber.Map{
-			"plan_name": stripeSub.Plan.Nickname,
-			"amount":    float64(stripeSub.Plan.Amount) / 100,
-			"currency":  string(stripeSub.Plan.Currency),
-			"interval":  string(stripeSub.Plan.Interval),
-		},
 	})
 }
 
-func GetMySubscription(c *fiber.Ctx) error {
+func CreateCustomerPortalSession(c *fiber.Ctx) error {
 	claims := c.Locals("user").(*jwt.Claims)
 
-	var userSub model.UserSubscription
-	if err := database.DB.Where("user_id = ? AND status = ?", claims.UserID, "active").First(&userSub).Error; err != nil {
+	var user model.User
+	if err := database.DB.First(&user, claims.UserID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "No active subscription found",
+			"error": "User not found",
 		})
 	}
 
-	return c.JSON(userSub)
+	params := &stripe.BillingPortalSessionParams{
+		Customer:  stripe.String(user.StripeCustomerID),
+		ReturnURL: stripe.String(os.Getenv("FRONTEND_URL") + "/settings/subscription"),
+	}
+
+	session, err := portalsession.New(params)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Could not create portal session",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"url": session.URL,
+	})
 }
 
 func HandleStripeWebhook(c *fiber.Ctx) error {
-	// Bu webhook secret'ı stripe listen komutunun verdiği secret olmalı
 	webhookSecret := os.Getenv("STRIPE_WEBHOOK_SECRET")
 	payload := c.Body()
 	signatureHeader := c.Get("Stripe-Signature")
@@ -183,10 +214,6 @@ func HandleStripeWebhook(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusBadRequest).Send(nil)
 		}
 
-		// Debug bilgisi ekleyelim
-		log.Printf("Processing checkout session: %s", s.ID)
-		log.Printf("Customer reference ID: %s", s.ClientReferenceID)
-
 		userID, _ := strconv.ParseUint(s.ClientReferenceID, 10, 32)
 
 		subscription := model.UserSubscription{
@@ -202,25 +229,40 @@ func HandleStripeWebhook(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusInternalServerError).Send(nil)
 		}
 
-		log.Printf("Successfully created subscription for user %d", userID)
+	case "customer.subscription.updated":
+		var sub stripe.Subscription
+		if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
+			return c.Status(fiber.StatusBadRequest).Send(nil)
+		}
+
+		var userSub model.UserSubscription
+		if err := database.DB.Where("stripe_sub_id = ?", sub.ID).First(&userSub).Error; err != nil {
+			return c.Status(fiber.StatusNotFound).Send(nil)
+		}
+
+		userSub.Status = string(sub.Status)
+		if err := database.DB.Save(&userSub).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).Send(nil)
+		}
+
+	case "customer.subscription.deleted":
+		var sub stripe.Subscription
+		if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
+			return c.Status(fiber.StatusBadRequest).Send(nil)
+		}
+
+		var userSub model.UserSubscription
+		if err := database.DB.Where("stripe_sub_id = ?", sub.ID).First(&userSub).Error; err != nil {
+			return c.Status(fiber.StatusNotFound).Send(nil)
+		}
+
+		userSub.Status = "cancelled"
+		if err := database.DB.Save(&userSub).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).Send(nil)
+		}
 	}
 
 	return c.SendStatus(fiber.StatusOK)
-}
-
-// Success ve Cancel handler'ları
-func HandleSubscriptionSuccess(c *fiber.Ctx) error {
-	return c.JSON(fiber.Map{
-		"message": "Subscription successful",
-		"status":  "success",
-	})
-}
-
-func HandleSubscriptionCancel(c *fiber.Ctx) error {
-	return c.JSON(fiber.Map{
-		"message": "Subscription cancelled",
-		"status":  "cancelled",
-	})
 }
 
 func GetInvoices(c *fiber.Ctx) error {
@@ -235,7 +277,7 @@ func GetInvoices(c *fiber.Ctx) error {
 
 	if user.StripeCustomerID == "" {
 		return c.JSON(fiber.Map{
-			"invoices": []interface{}{}, // Boş array dön
+			"invoices": []interface{}{},
 		})
 	}
 
@@ -271,30 +313,17 @@ func GetInvoices(c *fiber.Ctx) error {
 	})
 }
 
-// subscription_controller.go
-func CreateCustomerPortalSession(c *fiber.Ctx) error {
-	claims := c.Locals("user").(*jwt.Claims)
-
-	var user model.User
-	if err := database.DB.First(&user, claims.UserID).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "User not found",
-		})
-	}
-
-	// Stripe portal session oluştur
-	params := &stripe.BillingPortalSessionParams{
-		Customer:  stripe.String(user.StripeCustomerID),
-		ReturnURL: stripe.String("https://estepage.com/settings/subscription"),
-	}
-	session, err := billingportal.Session.New(params)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Could not create portal session",
-		})
-	}
-
+// Success ve Cancel handler'ları
+func HandleSubscriptionSuccess(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
-		"url": session.URL,
+		"message": "Subscription successful",
+		"status":  "success",
+	})
+}
+
+func HandleSubscriptionCancel(c *fiber.Ctx) error {
+	return c.JSON(fiber.Map{
+		"message": "Subscription cancelled",
+		"status":  "cancelled",
 	})
 }

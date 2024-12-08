@@ -2,10 +2,19 @@ package model
 
 import (
 	"estepage_backend/pkg/database"
-	"time"
-
 	"gorm.io/gorm"
 )
+
+
+type LeadStatus string
+const (
+    LeadStatusNew        LeadStatus = "new"
+    LeadStatusRead       LeadStatus = "read"
+    LeadStatusContacted  LeadStatus = "contacted"
+    LeadStatusNoResponse LeadStatus = "no_response"
+    LeadStatusCompleted  LeadStatus = "completed"
+)
+
 
 type Lead struct {
 	gorm.Model
@@ -14,12 +23,9 @@ type Lead struct {
 	Email       string     `json:"email"`
 	Phone       string     `json:"phone"`
 	Message     string     `json:"message" gorm:"type:text"`
-	Status      string     `json:"status" gorm:"default:'new'"` // new, contacted, qualified, converted, closed
 	ReadStatus  bool       `json:"read_status" gorm:"default:false"`
-	ContactedAt *time.Time `json:"contacted_at"`
-
-	// İlişkiler
-	Property Property `json:"property" gorm:"foreignKey:PropertyID"`
+	Status      LeadStatus `json:"status" gorm:"type:string;default:'new'"`
+	Property Property `json:"property"`
 }
 
 // Property modelini de ayrıca güncelleyelim

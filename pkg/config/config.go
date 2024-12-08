@@ -36,11 +36,11 @@ func Load() *Config {
 			Port: getEnv("PORT", "3000"),
 		},
 		Database: DatabaseConfig{
-			Host:     getEnv("DB_HOST", "localhost"),
-			Port:     getEnv("DB_PORT", "5432"),
-			User:     getEnv("DB_USER", "postgres"),
-			Password: getEnv("DB_PASSWORD", ""),
-			DBName:   getEnv("DB_NAME", "estepage"),
+		Host:      getEnv("DB_HOST", "localhost"),
+        Port:     getEnv("DB_PORT", "5432"),
+        User:     getEnv("DB_USER", "admin"),
+        Password: getEnv("DB_PASSWORD", "admin"),
+        DBName:   getEnv("DB_NAME", "estepage"),
 		},
 		JWT: JWTConfig{
 			Secret: getEnv("JWT_SECRET", "your-secret-key"),

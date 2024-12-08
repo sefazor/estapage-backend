@@ -7,7 +7,6 @@ import (
 	"estepage_backend/pkg/utils/jwt"
 	"log"
 	"strconv"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -30,12 +29,12 @@ func CreateLead(c *fiber.Ctx) error {
 		})
 	}
 
-	var property model.Property
-	if err := database.GetDB().Preload("User").First(&property, propertyID).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Property not found",
-		})
-	}
+	var user model.User
+    	if err := database.DB.First(&user, propertyID).Error; err != nil {
+    		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+    			"error": "User not found",
+    		})
+    	}
 
 	input := new(LeadInput)
 	if err := c.BodyParser(input); err != nil {
@@ -61,8 +60,8 @@ func CreateLead(c *fiber.Ctx) error {
 
 	if email.GlobalEmailService != nil {
 		err := email.GlobalEmailService.SendLeadNotificationEmail(
-			property.User.Email,
-			property.Title,
+			user.Email,
+			user.Title,
 			input.Name,
 			input.Email,
 			input.Phone,
@@ -115,63 +114,68 @@ func GetMyLeads(c *fiber.Ctx) error {
 }
 
 func UpdateLeadStatus(c *fiber.Ctx) error {
-	claims := c.Locals("user").(*jwt.Claims)
-	leadID := c.Params("id")
+    claims := c.Locals("user").(*jwt.Claims)
+    leadID := c.Params("id")
 
-	var lead model.Lead
-	if err := database.GetDB().Preload("Property").First(&lead, leadID).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Lead not found",
-		})
-	}
+    var lead model.Lead
+    if err := database.GetDB().Preload("Property").First(&lead, leadID).Error; err != nil {
+        return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+            "error": "Lead not found",
+        })
+    }
 
-	if lead.Property.UserID != claims.UserID {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"error": "Not authorized to update this lead",
-		})
-	}
+    if lead.Property.UserID != claims.UserID {
+        return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+            "error": "Not authorized to update this lead",
+        })
+    }
 
-	input := struct {
-		Status string `json:"status"`
-	}{}
+    input := struct {
+        Status string `json:"status"`
+    }{}
 
-	if err := c.BodyParser(&input); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid input",
-		})
-	}
+    if err := c.BodyParser(&input); err != nil {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+            "error": "Invalid input",
+        })
+    }
 
-	validStatuses := map[string]bool{
-		"new":       true,
-		"contacted": true,
-		"qualified": true,
-		"converted": true,
-		"closed":    true,
-	}
+    // Status kontrolü
+    switch model.LeadStatus(input.Status) {
+    case model.LeadStatusNew,
+         model.LeadStatusRead,
+         model.LeadStatusContacted,
+         model.LeadStatusNoResponse,
+         model.LeadStatusCompleted:
+        // Geçerli status
+    default:
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+            "error": "Invalid status value",
+            "valid_statuses": []string{
+                string(model.LeadStatusNew),
+                string(model.LeadStatusRead),
+                string(model.LeadStatusContacted),
+                string(model.LeadStatusNoResponse),
+                string(model.LeadStatusCompleted),
+            },
+        })
+    }
 
-	if !validStatuses[input.Status] {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid status value",
-		})
-	}
+    if err := database.GetDB().Model(&lead).Update("status", input.Status).Error; err != nil {
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+            "error": "Could not update lead status",
+        })
+    }
 
-	updates := map[string]interface{}{
-		"status": input.Status,
-	}
+    // Lead'i güncel haliyle yükle
+    database.GetDB().Preload("Property").First(&lead, leadID)
 
-	if input.Status == "contacted" {
-		now := time.Now()
-		updates["contacted_at"] = &now
-	}
-
-	if err := database.GetDB().Model(&lead).Updates(updates).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Could not update lead status",
-		})
-	}
-
-	return c.JSON(lead)
+    return c.JSON(fiber.Map{
+        "message": "Lead status updated successfully",
+        "lead": lead,
+    })
 }
+
 
 func MarkLeadAsRead(c *fiber.Ctx) error {
 	claims := c.Locals("user").(*jwt.Claims)
