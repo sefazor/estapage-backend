@@ -16,6 +16,12 @@ import (
 
 const MaxPropertyImages = 16
 
+type PropertyFeatureInput struct {
+	Title  string      `json:"title" validate:"required"`
+	Values interface{} `json:"values" validate:"required"` // String veya array olabilir
+	Order  int         `json:"order"`
+}
+
 type PropertyInput struct {
 	Title       string               `json:"title" validate:"required"`
 	Type        model.PropertyType   `json:"type" validate:"required"`
@@ -45,7 +51,8 @@ type PropertyInput struct {
 	CentralHeating  bool `json:"central_heating"`
 	SecuritySystem  bool `json:"security_system"`
 
-	Images []string `json:"images"`
+	Images   []string               `json:"images"`
+	Features []PropertyFeatureInput `json:"features"`
 }
 
 // CreateProperty yeni emlak ilanı oluşturur
@@ -102,24 +109,24 @@ func CreateProperty(c *fiber.Ctx) error {
 		})
 	}
 
-	 for i, imageURL := range input.Images {
-            if strings.HasPrefix(imageURL, "https://"+os.Getenv("R2_BUCKET_NAME")) {
-                image := model.PropertyImage{
-                    PropertyID: property.ID,
-                    URL:        imageURL,
-                    Order:      i,
-                    IsCover:    i == 0,
-                    // Size bilgisi upload sırasında cloudflare.UploadPropertyImage
-                    // fonksiyonunda kaydediliyor
-                }
-                if err := tx.Create(&image).Error; err != nil {
-                    tx.Rollback()
-                    return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                        "error": "Could not save images",
-                    })
-                }
-            }
-        }
+	for i, imageURL := range input.Images {
+		if strings.HasPrefix(imageURL, "https://"+os.Getenv("R2_BUCKET_NAME")) {
+			image := model.PropertyImage{
+				PropertyID: property.ID,
+				URL:        imageURL,
+				Order:      i,
+				IsCover:    i == 0,
+				// Size bilgisi upload sırasında cloudflare.UploadPropertyImage
+				// fonksiyonunda kaydediliyor
+			}
+			if err := tx.Create(&image).Error; err != nil {
+				tx.Rollback()
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": "Could not save images",
+				})
+			}
+		}
+	}
 
 	if err := tx.Commit().Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -219,19 +226,19 @@ func UpdateProperty(c *fiber.Ctx) error {
 
 	// Yeni resimleri kaydet
 	for i, imageURL := range input.Images {
-            image := model.PropertyImage{
-                PropertyID: property.ID,
-                URL:        imageURL,
-                Order:      i,
-                IsCover:    i == 0,
-            }
-            if err := tx.Create(&image).Error; err != nil {
-                tx.Rollback()
-                return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                    "error": "Could not save new images",
-                })
-            }
-        }
+		image := model.PropertyImage{
+			PropertyID: property.ID,
+			URL:        imageURL,
+			Order:      i,
+			IsCover:    i == 0,
+		}
+		if err := tx.Create(&image).Error; err != nil {
+			tx.Rollback()
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Could not save new images",
+			})
+		}
+	}
 
 	if err := tx.Commit().Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -276,7 +283,7 @@ func ListUserProperties(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"user": user.GetPublicProfile(),
+		"user":       user.GetPublicProfile(),
 		"properties": properties,
 	})
 }

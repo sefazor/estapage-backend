@@ -79,8 +79,9 @@ type Property struct {
 	SecuritySystem  bool `json:"security_system"gorm:"not null"`  // Güvenlik sistemi var mı?
 
 	// İlişkiler
-	User   User            `json:"-" gorm:"foreignKey:UserID"`
-	Images []PropertyImage `json:"images" gorm:"foreignKey:PropertyID;constraint:OnDelete:CASCADE"`
+	User     User              `json:"-" gorm:"foreignKey:UserID"`
+	Images   []PropertyImage   `json:"images" gorm:"foreignKey:PropertyID;constraint:OnDelete:CASCADE"`
+	Features []PropertyFeature `json:"features" gorm:"foreignKey:PropertyID;constraint:OnDelete:CASCADE"`
 }
 
 type PropertyImage struct {

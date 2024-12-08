@@ -29,8 +29,9 @@ func setupRoutes(app *fiber.App) {
 	auth.Post("/request-reset", controller.RequestPasswordReset)
 	auth.Post("/reset-password", controller.ResetPassword)
 
-    api.Post("/properties/:property_id/leads", controller.CreateLead)
-
+	// Leads
+	api.Post("/properties/:property_id/leads", controller.CreatePropertyLead)
+	api.Post("/agents/:user_id/leads", controller.CreateProfileLead)
 
 	// Public Properties Routes
 	publicProps := api.Group("/p")
@@ -57,7 +58,6 @@ func setupRoutes(app *fiber.App) {
 	properties.Delete("/:id", middleware.CheckPropertyOwnership(), controller.DeleteProperty)
 	properties.Post("/:property_id/images", middleware.CheckImageLimit(), controller.UploadPropertyImage)
 	properties.Delete("/images/:image_id", middleware.CheckPropertyOwnership(), controller.DeletePropertyImage)
-
 
 	// Dashboard routes
 	dashboard := api.Group("/dashboard", middleware.AuthMiddleware())
@@ -140,6 +140,7 @@ func main() {
 		&model.Lead{},
 		&model.NewsletterSubscriber{},
 		&model.LoginHistory{},
+		&model.PropertyFeature{},
 	)
 	if err != nil {
 		log.Printf("Migration warning: %v", err)
