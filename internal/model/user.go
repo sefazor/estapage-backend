@@ -12,9 +12,10 @@ import (
 
 type User struct {
 	gorm.Model
-	Email    string `gorm:"uniqueIndex;not null"`
-	Password string `gorm:"not null"`
-	Username string `gorm:"uniqueIndex;not null"`
+	Email            string `gorm:"uniqueIndex;not null"`
+	Password         string `gorm:"not null"`
+	Username         string `gorm:"uniqueIndex;not null"`
+	StripeCustomerID string `gorm:"size:255"`
 
 	// Opsiyonel profil bilgileri (settings'den güncellenecek)
 

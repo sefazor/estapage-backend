@@ -35,6 +35,12 @@ type ResetPasswordInput struct {
 	Password string `json:"password" validate:"required,min=6"`
 }
 
+type LoginHistoryResponse struct {
+	Device    string    `json:"device"`
+	Location  string    `json:"location"`
+	CreatedAt time.Time `json:"login_time"`
+}
+
 func InitAuthController() {}
 
 func generateUsername(companyName string) string {
@@ -125,6 +131,29 @@ func Login(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Invalid credentials",
 		})
+	}
+
+	// User agent'dan cihaz bilgisini al
+	userAgent := c.Get("User-Agent")
+	device := parseUserAgent(userAgent) // Bu fonksiyonu aşağıda tanımlayacağız
+
+	// IP adresini al
+	ip := c.IP()
+
+	// IP'den location bilgisini al (basit implementasyon)
+	location := "Unknown Location" // Gerçek implementasyonda IP'den location tespiti yapılacak
+
+	// Login history kaydı oluştur
+	loginHistory := model.LoginHistory{
+		UserID:   user.ID,
+		Device:   device,
+		Location: location,
+		IP:       ip,
+	}
+
+	if err := database.GetDB().Create(&loginHistory).Error; err != nil {
+		log.Printf("Could not save login history: %v", err)
+		// Login history kaydedilemese bile login işlemine devam et
 	}
 
 	token, err := jwt.GenerateToken(user.ID, user.Email, user.CompanyName)
@@ -259,4 +288,61 @@ func ResetPassword(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"message": "Password has been reset successfully",
 	})
+}
+
+// Yeni endpoint: Login history'yi getir
+func GetLoginHistory(c *fiber.Ctx) error {
+	claims := c.Locals("user").(*jwt.Claims)
+
+	var loginHistory []LoginHistoryResponse
+	if err := database.GetDB().Model(&model.LoginHistory{}).
+		Select("device, location, created_at").
+		Where("user_id = ?", claims.UserID).
+		Order("created_at DESC").
+		Limit(10). // Son 10 giriş
+		Find(&loginHistory).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Could not fetch login history",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"login_history": loginHistory,
+	})
+}
+
+// User-Agent parser
+func parseUserAgent(ua string) string {
+	if strings.Contains(ua, "iPhone") || strings.Contains(ua, "iPad") {
+		if strings.Contains(ua, "Safari") {
+			return "Safari on iPhone"
+		}
+		return "Browser on iPhone"
+	}
+	if strings.Contains(ua, "Android") {
+		return "Browser on Android"
+	}
+	if strings.Contains(ua, "Chrome") {
+		return "Chrome on " + getOS(ua)
+	}
+	if strings.Contains(ua, "Firefox") {
+		return "Firefox on " + getOS(ua)
+	}
+	if strings.Contains(ua, "Safari") {
+		return "Safari on " + getOS(ua)
+	}
+	return "Unknown Browser"
+}
+
+func getOS(ua string) string {
+	if strings.Contains(ua, "Windows") {
+		return "Windows"
+	}
+	if strings.Contains(ua, "Mac OS") {
+		return "Mac"
+	}
+	if strings.Contains(ua, "Linux") {
+		return "Linux"
+	}
+	return "Unknown OS"
 }

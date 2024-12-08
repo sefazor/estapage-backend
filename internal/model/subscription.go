@@ -1,6 +1,10 @@
 package model
 
-import "gorm.io/gorm"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 type Subscription struct {
 	gorm.Model
@@ -16,10 +20,11 @@ type Subscription struct {
 
 type UserSubscription struct {
 	gorm.Model
-	UserID       uint   `json:"user_id" gorm:"not null"`
-	StripePlanID string `json:"stripe_plan_id"`
-	Status       string `json:"status" gorm:"default:'active'"`
-	StripeSubID  string `json:"stripe_subscription_id"`
-	ExpiresAt    string `json:"expires_at"`
-	User         User   `gorm:"foreignKey:UserID"`
+	UserID           uint      `json:"user_id" gorm:"not null"`
+	StripePlanID     string    `json:"stripe_plan_id"`
+	Status           string    `json:"status" gorm:"default:'active'"`
+	StripeSubID      string    `json:"stripe_subscription_id"`
+	ExpiresAt        string    `json:"expires_at"`
+	CancellationDate time.Time `json:"cancellation_date"`
+	User             User      `gorm:"foreignKey:UserID"`
 }

@@ -10,7 +10,9 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/stripe/stripe-go/v74"
+	"github.com/stripe/stripe-go/v74/billingportal"
 	"github.com/stripe/stripe-go/v74/checkout/session"
+	stripeinvoice "github.com/stripe/stripe-go/v74/invoice" // invoice çakışmasını önlemek için alias kullandık
 	"github.com/stripe/stripe-go/v74/subscription"
 	"github.com/stripe/stripe-go/v74/webhook"
 
@@ -82,6 +84,7 @@ func CreateCheckoutSession(c *fiber.Ctx) error {
 func CancelSubscription(c *fiber.Ctx) error {
 	claims := c.Locals("user").(*jwt.Claims)
 
+	// Aktif aboneliği bul
 	var userSub model.UserSubscription
 	if err := database.DB.Where("user_id = ? AND status = ?", claims.UserID, "active").First(&userSub).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -89,24 +92,57 @@ func CancelSubscription(c *fiber.Ctx) error {
 		})
 	}
 
-	// Cancel subscription in Stripe
-	_, err := subscription.Cancel(userSub.StripeSubID, nil)
+	// Stripe'dan subscription detaylarını al
+	stripeSub, err := subscription.Get(userSub.StripeSubID, nil)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Could not fetch subscription details from Stripe",
+		})
+	}
+
+	// İptal parametrelerini ayarla
+	params := &stripe.SubscriptionParams{
+		CancelAtPeriodEnd: stripe.Bool(true), // Dönem sonunda iptal et
+	}
+
+	// Stripe'da aboneliği iptal et
+	cancelledSub, err := subscription.Update(userSub.StripeSubID, params)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Could not cancel subscription with Stripe",
 		})
 	}
 
-	// Update status in database
-	userSub.Status = "cancelled"
+	// Veritabanında durumu güncelle
+	userSub.Status = "cancelling" // dönem sonunda iptal olacak
+	userSub.CancellationDate = time.Now()
 	if err := database.DB.Save(&userSub).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Could not update subscription status",
 		})
 	}
 
+	// Dönem sonu tarihini al
+	periodEnd := time.Unix(stripeSub.CurrentPeriodEnd, 0)
+	daysRemaining := int(time.Until(periodEnd).Hours() / 24)
+
+	// Detaylı response dön
 	return c.JSON(fiber.Map{
 		"message": "Subscription cancelled successfully",
+		"details": fiber.Map{
+			"status":             "cancelling",
+			"current_period_end": periodEnd,
+			"days_remaining":     daysRemaining,
+			"cancellation_date":  userSub.CancellationDate,
+			"plan_access_until": fmt.Sprintf("Plan özelliklerini %s tarihine kadar kullanabilirsiniz",
+				periodEnd.Format("2 January 2006")),
+		},
+		"subscription": fiber.Map{
+			"plan_name": stripeSub.Plan.Nickname,
+			"amount":    float64(stripeSub.Plan.Amount) / 100,
+			"currency":  string(stripeSub.Plan.Currency),
+			"interval":  string(stripeSub.Plan.Interval),
+		},
 	})
 }
 
@@ -184,5 +220,81 @@ func HandleSubscriptionCancel(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"message": "Subscription cancelled",
 		"status":  "cancelled",
+	})
+}
+
+func GetInvoices(c *fiber.Ctx) error {
+	claims := c.Locals("user").(*jwt.Claims)
+
+	var user model.User
+	if err := database.GetDB().First(&user, claims.UserID).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Could not fetch user details",
+		})
+	}
+
+	if user.StripeCustomerID == "" {
+		return c.JSON(fiber.Map{
+			"invoices": []interface{}{}, // Boş array dön
+		})
+	}
+
+	params := &stripe.InvoiceListParams{
+		Customer: stripe.String(user.StripeCustomerID),
+	}
+	params.Filters.AddFilter("limit", "", "100")
+
+	iterator := stripeinvoice.List(params)
+
+	var invoices []map[string]interface{}
+	for iterator.Next() {
+		inv := iterator.Invoice()
+
+		invoices = append(invoices, map[string]interface{}{
+			"id":       inv.Number,
+			"date":     time.Unix(inv.Created, 0).Format("January 2, 2006"),
+			"amount":   float64(inv.AmountPaid) / 100,
+			"currency": string(inv.Currency),
+			"status":   string(inv.Status),
+			"pdf":      inv.InvoicePDF,
+		})
+	}
+
+	if err := iterator.Err(); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Could not fetch invoices from Stripe",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"invoices": invoices,
+	})
+}
+
+// subscription_controller.go
+func CreateCustomerPortalSession(c *fiber.Ctx) error {
+	claims := c.Locals("user").(*jwt.Claims)
+
+	var user model.User
+	if err := database.DB.First(&user, claims.UserID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "User not found",
+		})
+	}
+
+	// Stripe portal session oluştur
+	params := &stripe.BillingPortalSessionParams{
+		Customer:  stripe.String(user.StripeCustomerID),
+		ReturnURL: stripe.String("https://estepage.com/settings/subscription"),
+	}
+	session, err := billingportal.Session.New(params)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Could not create portal session",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"url": session.URL,
 	})
 }

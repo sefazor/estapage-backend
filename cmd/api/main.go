@@ -72,6 +72,8 @@ func setupRoutes(app *fiber.App) {
 	settings.Put("/profile", controller.UpdateProfile)
 	settings.Post("/avatar", cloudflare.UploadAvatarHandler)
 	settings.Post("/change-password", controller.ChangePassword)
+	settings.Get("/login-history", controller.GetLoginHistory)
+	settings.Get("/invoices", controller.GetInvoices)
 
 	// Protected lead routes
 	leads := protected.Group("/leads")
@@ -137,6 +139,7 @@ func main() {
 		&model.PropertyStats{},
 		&model.Lead{},
 		&model.NewsletterSubscriber{},
+		&model.LoginHistory{},
 	)
 	if err != nil {
 		log.Printf("Migration warning: %v", err)
